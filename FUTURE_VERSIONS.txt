@@ -1,0 +1,68 @@
+WorldPanel future-version checklist
+===================================
+
+Do not create a target module until it has been compiled against a real
+NeoForge/Minecraft version. Start by copying the structure of one verified
+platform build, then change only facts confirmed by the target MDK.
+
+1. Obtain the target MDK and read its build.gradle(.kts), gradle.properties,
+   NeoForge release notes, ModDevGradle documentation, and NeoForged primers.
+   Record the exact Minecraft and NeoForge versions; the pair must resolve to a
+   valid NeoForge artifact.
+
+2. Check the required Java version in the target MDK. Set both java.toolchain
+   and kotlin.jvmToolchain in the new isolated build. Do not infer Java 21 or
+   Java 25 from an adjacent Minecraft version.
+
+3. Check the MDK's ModDevGradle plugin and Gradle wrapper compatibility. A new
+   platform build may use a different plugin version; it must keep its own
+   settings.gradle.kts/plugin resolution so an update cannot break an existing
+   target.
+
+4. Read the KotlinForForge and KotlinLangForge release notes, README, Maven
+   metadata, and supported-Minecraft tables separately. Select one runtime
+   provider that publishes the target loader/game line and a Kotlin Gradle
+   plugin compatible with it. Do not rename one dependency into the other.
+   Keep the provider compile-only in WorldPanel unless the API genuinely calls
+   provider classes; document the consumer's runtime requirement instead.
+
+5. Generate/download the patched Minecraft sources through the target MDK and
+   inspect every import in platforms/render-common and the target-specific
+   adapter. Search for removed or changed APIs in PoseStack, VertexConsumer,
+   MultiBufferSource, RenderType, Font/Component, ResourceLocation,
+   RenderLevelStageEvent, ItemStack, ItemDisplayContext, OverlayTexture, and
+   Minecraft's item rendering classes.
+
+6. Give special attention to renderer scheduling. Compare the target's
+   rendering pipeline and NeoForge event timing (including FrameGraph or
+   feature submission changes) before recommending a render stage to consumers.
+   Never register a global event handler from the WorldPanel library merely to
+   preserve an old sample.
+
+7. Compile first. If only a direct API adapter differs, create a new
+   target-specific source file such as WorldPanelItemRenderer. If the public
+   WindowElement or FloatingWindow renderer must differ, move the affected code
+   out of platforms/render-common into that target rather than adding version
+   conditionals or breaking a verified target.
+
+8. A change belongs in core only if it has no Minecraft/NeoForge import and is
+   covered by core tests. It belongs in render-common only when it compiles and
+   behaves identically for every supported target. All item, texture, buffer,
+   event, model, or client-render-pipeline changes default to a target-specific
+   module.
+
+9. Run, at minimum:
+
+       ./gradlew -p core test
+       ./gradlew -p platforms/neoforge-<target> build
+
+   Also run the existing target builds after shared changes. Launch the target
+   client and manually test solid/animated colours, formatted Component text,
+   textures with alpha, item icons, rounded borders/shadows, empty panels,
+   fixed sizes smaller than padding, large sizes, and both camera-facing and
+   entity-facing orientation.
+
+10. Only add the target to README's supported table after its build succeeds.
+    Record the exact versions and any API adaptation in README. If compilation
+    or a client run cannot be performed, say so explicitly; do not call the
+    target supported.

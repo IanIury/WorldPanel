@@ -1,0 +1,8 @@
+WorldPanel is adapted from the FloatingWindow, WindowAlignment, WindowColor,
+and WindowElement classes in IanIury/Training-Dummy.
+
+Original source: https://github.com/IanIury/Training-Dummy
+Original author credit: Ian / IanIury13
+Original license: MIT License, Copyright (c) 2026 Ian
+
+The upstream MIT license is reproduced in LICENSE as required by its terms.

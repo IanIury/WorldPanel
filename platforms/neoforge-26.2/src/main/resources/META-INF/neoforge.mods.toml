@@ -1,0 +1,9 @@
+modLoader="javafml"
+loaderVersion="[1,)"
+license="MIT"
+
+[[mods]]
+modId="worldpanel"
+version="0.1.0-SNAPSHOT"
+displayName="WorldPanel"
+description="WorldPanel library for Minecraft/NeoForge."
