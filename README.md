@@ -1,91 +1,158 @@
-# WorldPanel
+# WorldPanel [![English Version](https://img.shields.io/badge/lang-English%20Version-blue.svg)](README_EN.md)
 
-WorldPanel é uma biblioteca Kotlin para criar e renderizar painéis visuais no mundo 3D do Minecraft (Minecraft/NeoForge): etiquetas flutuantes sobre entidades, status de bonecos de treino (training dummies), placas, letreiros 3D, barras de vida estilizadas, janelas geométricas e interfaces imersivas no mundo.
+**WorldPanel** é uma biblioteca em Kotlin para criar e renderizar painéis visuais, janelas flutuantes e textos 3D diretamente no mundo do Minecraft (NeoForge).
 
-A biblioteca foi projetada de forma modular, limpa e desacoplada: **não possui classe `@Mod` obrigatória** e **não registra eventos globais automaticamente**. O mod consumidor retém controle total sobre o momento, estágio de renderização, posicionamento, luz e visibilidade do painel.
+Ideal para exibir **etiquetas flutuantes sobre entidades**, **status de bonecos de treino (training dummies)**, **placas informativas de blocos/máquinas**, **barras de vida de chefes**, **letreiros 3D** e **interfaces imersivas no mundo**.
+
+### Por que usar o WorldPanel?
+- **Desacoplado e sob seu controle**: Não registra eventos globais ocultos nem interfere na renderização padrão do jogo. Você decide exatamente **quando**, **onde** e **para quem** renderizar chamando `.render(poseStack, buffer, packedLight)`.
+- **Geometria e Layout Inteligentes**: Suporta desde retângulos arredondados até círculos, triângulos, hexágonos e losangos. O motor de layout ajusta automaticamente a posição e escala de cada linha de texto, ícone de item e separador para caber perfeitamente dentro do contorno real da forma escolhida.
+- **Renderização 2D e 3D Volumétrica**: Crie desde painéis planos clássicos até placas 3D com espessura física, iluminação lateral e textos com extrusão 3D.
+- **Cores e Efeitos Animados**: Gradientes estáticos ou animados, arco-íris (`Rainbow`), pulsação (`Pulse`) e transições suaves (`Fade`) prontos para uso em fundos, bordas e textos.
 
 ---
 
-## 📚 Guias Rápidos Práticos
+## 📚 Guias Passo a Passo
 
-- 📘 [**Como Criar uma Janela Simples Passo a Passo**](docs/janela_simples.md): Guia completo com exemplos de builder, tamanhos, padding, bordas, ícones de itens e renderização.
-- 🔤 [**Como Criar Letreiro e Texto 3D**](docs/letreiro_e_texto_3d.md): Guia ensinando a renderizar texto flutuante sem janela de fundo (`textOnly()`) e letreiros com extrusão 3D física via `FloatingText`.
+- 📘 [**Como Criar uma Janela Simples Passo a Passo**](docs/janela_simples.md) — Guia completo com exemplos de builder, tamanhos, padding, bordas, ícones de itens, ajuste automático à forma e onde chamar a renderização.
+- 🔤 [**Como Criar Letreiro e Texto 3D**](docs/letreiro_e_texto_3d.md) — Guia ensinando a renderizar texto flutuante sem janela de fundo (`textOnly()`) e letreiros com extrusão 3D física via `FloatingText`.
 
 ---
 
-## 📦 Versões e Alvos Suportados
+## 📦 Versões Suportadas
 
-| Minecraft / Loader | Artefato | Java | Kotlin | Language Provider |
-| :--- | :--- | :---: | :---: | :--- |
-| **1.21.1** (NeoForge 21.1.x) | `worldpanel-neoforge-1.21.1` | Java 21 | 2.1.20 | KotlinForForge 5.10.0 |
-| **26.2** (NeoForge 26.2.x) | `worldpanel-neoforge-26.2` | Java 25 | 2.4.21 | KotlinLangForge 2.15.0+ |
-| **Agnóstico (Core)** | `worldpanel-core` | Java 21+ | 2.x | 100% Kotlin Puro (Sem Minecraft) |
-
-> [!NOTE]
-> O artefato `worldpanel-neoforge-1.21.1` embute o código do `core` e inclui metadados `META-INF/neoforge.mods.toml` configurados como `modLoader="lowcodefml"`. Isso permite que o NeoForge FML carregue as classes da biblioteca diretamente na camada de módulos em tempo de execução (`runClient`) e distribuição, sem exigir nenhuma classe `@Mod`.
+| Minecraft | Loader | Artefato | Java | Kotlin | Language Provider |
+| :--- | :--- | :--- | :---: | :---: | :--- |
+| **1.21.1** | NeoForge 21.1.x | `worldpanel-neoforge-1.21.1` | Java 21 | 2.1.20 | KotlinForForge 5.10.0+ |
+| **26.2** | NeoForge 26.2.x | `worldpanel-neoforge-26.2` | Java 25 | 2.4.21 | KotlinLangForge 2.15.0+ |
 
 ---
 
 ## 🚀 Como Adicionar ao seu Mod
 
-### 1. Publicação Local (Maven Local)
-Enquanto a biblioteca não estiver publicada em um repositório Maven remoto público, publique-a no repositório Maven local da sua máquina executando na raiz do projeto WorldPanel:
+Você pode adicionar o **WorldPanel** ao seu projeto pelo **Modrinth Maven** ou **CurseMaven**.
 
-```bash
-./gradlew publishAllToMavenLocal
-```
+### No `build.gradle.kts` (Kotlin DSL)
 
-### 2. Configurando o Projeto Consumidor
-
-#### No `build.gradle` (Groovy DSL):
-```groovy
-repositories {
-    mavenLocal() // Obrigatório para localizar os artefatos SNAPSHOT locais
-    mavenCentral()
-    maven { url = "https://thedarkcolour.github.io/KotlinForForge/" }
-}
-
-dependencies {
-    // Provedor Kotlin para NeoForge 1.21.1
-    implementation 'thedarkcolour:kotlinforforge-neoforge:5.10.0'
-
-    // WorldPanel para 1.21.1
-    implementation 'dev.ian.worldpanel:worldpanel-neoforge-1.21.1:0.1.0-SNAPSHOT'
-
-    // Empacotamento Jar-in-Jar (JiJ) para distribuição aos jogadores
-    jarJar 'dev.ian.worldpanel:worldpanel-neoforge-1.21.1:0.1.0-SNAPSHOT'
-}
-```
-
-#### No `build.gradle.kts` (Kotlin DSL):
 ```kotlin
 repositories {
-    mavenLocal() // Obrigatório para localizar os artefatos SNAPSHOT locais
     mavenCentral()
     maven("https://thedarkcolour.github.io/KotlinForForge/")
+    maven("https://api.modrinth.com/maven") {
+        content { includeGroup("maven.modrinth") }
+    }
+    maven("https://cursemaven.com") {
+        content { includeGroup("curse.maven") }
+    }
 }
 
 dependencies {
-    // Provedor Kotlin para NeoForge 1.21.1
+    // Provedor Kotlin para NeoForge
     implementation("thedarkcolour:kotlinforforge-neoforge:5.10.0")
 
-    // WorldPanel para 1.21.1
-    val worldPanel = implementation("dev.ian.worldpanel:worldpanel-neoforge-1.21.1:0.1.0-SNAPSHOT")
+    // WorldPanel via Modrinth (substitua <versao> pela versão desejada)
+    implementation("maven.modrinth:worldpanel:<versao>")
 
-    // Empacotamento Jar-in-Jar (JiJ) para distribuição aos jogadores
-    jarJar(worldPanel)
+    // Ou via CurseMaven:
+    // implementation("curse.maven:worldpanel-<project-id>:<file-id>")
+}
+```
+
+### No `build.gradle` (Groovy DSL)
+
+```groovy
+repositories {
+    mavenCentral()
+    maven { url = "https://thedarkcolour.github.io/KotlinForForge/" }
+    maven {
+        url = "https://api.modrinth.com/maven"
+        content { includeGroup "maven.modrinth" }
+    }
+    maven {
+        url = "https://cursemaven.com"
+        content { includeGroup "curse.maven" }
+    }
+}
+
+dependencies {
+    // Provedor Kotlin para NeoForge
+    implementation 'thedarkcolour:kotlinforforge-neoforge:5.10.0'
+
+    // WorldPanel via Modrinth (substitua <versao> pela versão desejada)
+    implementation "maven.modrinth:worldpanel:<versao>"
+
+    // Ou via CurseMaven:
+    // implementation "curse.maven:worldpanel-<project-id>:<file-id>"
 }
 ```
 
 ---
 
-## 📐 Sistema Extensível de Formas e Qualidade de Bordas
+## ⚡ Exemplo Rápido de Uso
 
-WorldPanel padroniza a qualidade visual de todas as formas geométricas 2D, utilizando a mesma precisão do retângulo arredondado de referência (`PanelShape.roundedRectangle`).
+Construa sua janela com `FloatingWindow.builder()` e chame `.render(poseStack, buffer, packedLight)` dentro do seu `EntityRenderer`, `BlockEntityRenderer` ou evento `RenderLevelStageEvent`:
 
-- **Junções em Meia-Esquadria (Miter Joins)**: Polígonos (retângulos, triângulos, pentágonos, hexágonos, losangos, trapézios) geram um anel fechado e contínuo de quads com junções de arestas exatas, eliminando cantos abertos ou lacunas.
-- **Círculos e Elipses Suaves**: Círculos e elipses são renderizados com 72 subdivisões radiais e bordas concêntricas uniformes.
-- **Preenchimento com Inset Preciso**: Quando uma borda é configurada, o preenchimento interno é ajustado para iniciar exatamente onde a borda termina no interior, sem sobreposição nem *z-fighting*.
+```kotlin
+import dev.ian.worldpanel.FloatingWindow
+import dev.ian.worldpanel.WindowAlignment
+import dev.ian.worldpanel.WindowColor
+import dev.ian.worldpanel.WindowElement
+import dev.ian.worldpanel.shape.PanelShape
+import com.mojang.blaze3d.vertex.PoseStack
+import net.minecraft.client.renderer.MultiBufferSource
+
+fun renderStatusPanel(
+    poseStack: PoseStack,
+    buffer: MultiBufferSource,
+    packedLight: Int
+) {
+    val window = FloatingWindow.builder()
+        // 1. Posição e orientação no mundo
+        .setFaceCamera(true)                       // Gira automaticamente para olhar o jogador
+        .setOffset(0.0, 2.2, 0.0)                  // 2.2 blocos acima da origem
+        .setScale(0.025f)                          // Escala no mundo 3D
+
+        // 2. Formato e estilo visual
+        .setShape(PanelShape.roundedRectangle(4f)) // Retângulo com cantos arredondados
+        .setAlignment(WindowAlignment.CENTER)
+        .setPadding(4f)
+        .setBackground(WindowColor.Solid(0xDD181C2A))
+        .setBorder(WindowColor.Solid(0xFF38BDF8), width = 0.75f)
+        .setShadow(WindowColor.Solid(0x88000000), offset = 1.5f)
+
+        // 3. Conteúdo da janela
+        .addText(
+            text = "Status da Entidade",
+            color = WindowColor.Solid(0xFF38BDF8),
+            shadow = true,
+            textScale = 1.1f,
+            alignment = WindowElement.Text.TextAlignment.CENTER
+        )
+        .addSeparator(
+            color = WindowColor.Solid(0xFF475569),
+            thickness = 0.75f,
+            margin = 2f
+        )
+        .addText(
+            text = "HP: 100 / 100",
+            color = WindowColor.Solid(0xFF4ADE80),
+            shadow = true
+        )
+        .build()
+
+    // 4. Renderiza na cena
+    window.render(poseStack, buffer, packedLight)
+}
+```
+
+---
+
+## 📐 Sistema de Formas e Ajuste Inteligente de Conteúdo
+
+O WorldPanel oferece diversas formas geométricas 2D com bordas contínuas de alta precisão (junções em meia-esquadria sem falhas nos cantos e curvas suaves de 72 segmentos) e **encaixe real de conteúdo ao contorno da forma**:
+
+- **Ajuste Automático ao Contorno**: Em formas não retangulares (triângulos, círculos, losangos, trapézios, paralelogramos e polígonos), cada linha de texto ou ícone é posicionada levando em conta a largura disponível naquela altura exata ($Y$). Linhas curtas aproveitam pontas estreitas e linhas longas encaixam-se nas regiões mais largas, sem vazar pelas bordas inclinadas ou curvas.
+- **Escala Automática (`autoScaleContent`)**: Se você definir um tamanho fixo (`.setSize(width, height)`), o conteúdo é ampliado ou reduzido proporcionalmente para preencher o interior da forma com perfeição. Sem `.setSize(...)`, a forma cresce automaticamente ao redor do conteúdo.
 
 | Forma | Criação via Factory | Descrição |
 | :--- | :--- | :--- |
@@ -95,40 +162,61 @@ WorldPanel padroniza a qualidade visual de todas as formas geométricas 2D, util
 | **Círculo** | `PanelShape.circle()` | Círculo com 72 segmentos radiais e contorno suave. |
 | **Elipse** | `PanelShape.ellipse()` | Elipse ajustada à largura e altura total. |
 | **Triângulo** | `PanelShape.triangle()`, `equilateralTriangle()`, `rightTriangle()` | Isósceles, equilátero ou retângulo com orientação (`UP`, `DOWN`, `LEFT`, `RIGHT`). |
-| **Losango (Diamond)** | `PanelShape.rhombus()` | Losango em diamante conectando centros das arestas. |
+| **Losango (Diamond)** | `PanelShape.rhombus()` | Losango em diamante conectando os centros das arestas. |
 | **Trapézio** | `PanelShape.trapezoid(topWidthRatio)` | Trapézio com proporção da base superior ajustável. |
-| **Paralelogramo** | `PanelShape.parallelogram(skewRatio)` | Paralelogramo com inclinação ajustável. |
+| **Paralelogramo** | `PanelShape.parallelogram(skewRatio)` | Paralelogramo com inclinação lateral ajustável. |
 | **Polígono Regular** | `PanelShape.polygon(sides, rotation)` | Pentágono (`sides = 5`), Hexágono (`sides = 6`), Octógono (`sides = 8`), etc. |
-| **Silhueta PNG** | `PanelShape.texture("modid:textures/gui/panel.png")` | Forma livre baseada na silhueta alfa de um PNG. |
+| **Silhueta PNG** | `PanelShape.texture("modid:textures/gui/panel.png")` | Forma livre baseada na silhueta alfa de uma textura PNG. |
 
 ---
 
-## ➖ Separadores Inteligentes Adaptáveis à Forma (`addSeparator`)
+## ➖ Separadores Adaptáveis à Forma (`addSeparator`)
 
-O `.addSeparator(...)` ajusta seu comprimento automaticamente de acordo com o contorno real da forma na altura vertical ($Y$) exata onde está posicionado:
+O `.addSeparator(...)` calcula automaticamente seu comprimento horizontal de acordo com o contorno da forma na altura vertical ($Y$) onde está posicionado:
 
 ```kotlin
 window.addSeparator(
     color = WindowColor.Solid(0xFF808080L),
     thickness = 0.5f,
     margin = 2f,
-    includeBorder = false, // Padrão: não atravessa nem sobrepõe a borda da janela
-    edgeToEdge = true       // Padrão: vai de um lado ao outro da forma naquela altura Y
+    includeBorder = false, // Padrão: para exatamente na face interna da borda
+    edgeToEdge = true      // Padrão: acompanha de um lado ao outro da forma naquela altura Y
 )
 ```
 
-- **Geometria Dinâmica por Altura**: Em formas curvas (círculos e elipses) ou polígonos (triângulos, trapézios), um separador posicionado no centro terá largura máxima, enquanto um separador duas linhas abaixo será automaticamente mais curto, acompanhando a curva da forma e **nunca vazando para fora do painel**.
-- **Controle da Borda (`includeBorder`)**:
-  - `includeBorder = false` *(padrão)*: A linha para exatamente na face interna da borda, garantindo acabamento limpo.
-  - `includeBorder = true`: A linha estende-se até o limite geométrico absoluto do painel.
+Em formas curvas (círculos/elipses) ou inclinadas (triângulos/trapézios), o separador acompanha a geometria da janela sem nunca atravessar ou vazar para fora da borda.
 
 ---
 
-## 🔤 Letreiros 3D e Texto Solto Sem Janela
+## 🧱 Painéis Volumétricos 3D (`PanelRenderMode.VOLUME_3D`)
 
-Se você quer renderizar apenas texto sem nenhuma janela de fundo (por exemplo, letreiros flutuantes em 3D, títulos de chefes ou nomes):
+Além do modo plano (`PanelRenderMode.FLAT_2D`), qualquer forma pode ser transformada em uma placa tridimensional espessa com **frente, laterais sombreadas e face traseira**:
 
-### Opção 1: `FloatingText.render3D` em Uma Linha
+```kotlin
+val painel3D = FloatingWindow.builder()
+    .setShape(PanelShape.roundedRectangle(cornerRadius = 4f))
+    .setRenderMode(PanelRenderMode.VOLUME_3D)
+    .setVolume3D(
+        thickness = 3.0f,         // Espessura física no eixo Z
+        sideColor = null,         // Sombra calculada automaticamente a partir da cor frontal
+        sideDarkening = 0.65f,    // Intensidade de escurecimento das laterais
+        lightAngleDegrees = 45f   // Ângulo da luz para efeito de relevo
+    )
+    .setBackground(WindowColor.Solid(0xFF2C3E50))
+    .setBorder(WindowColor.Solid(0xFF1ABC9C), width = 1f)
+    .addText("Painel 3D Volumétrico", WindowColor.Solid(0xFFFFFFFF))
+    .addSeparator()
+    .addText("Laterais com relevo físico")
+    .build()
+```
+
+---
+
+## 🔤 Letreiros 3D e Texto Flutuante Sem Janela (`FloatingText`)
+
+Para renderizar apenas texto flutuante no mundo — como nomes de chefes, indicadores de dano ou letreiros 3D com profundidade física:
+
+### Chamada Direta em Uma Linha
 ```kotlin
 FloatingText.render3D(
     poseStack = poseStack,
@@ -141,7 +229,7 @@ FloatingText.render3D(
 )
 ```
 
-### Opção 2: `FloatingText.builder()` para Várias Linhas
+### Múltiplas Linhas com Builder
 ```kotlin
 val letreiro = FloatingText.builder()
     .setOffset(0.0, 2.8, 0.0)
@@ -154,63 +242,29 @@ val letreiro = FloatingText.builder()
 letreiro.render(poseStack, buffer, packedLight)
 ```
 
-### Opção 3: `FloatingWindow.builder().textOnly()`
-Transforma o `FloatingWindow` tradicional em um renderizador transparente de elementos (sem placas, bordas ou sombras).
-
----
-
-## 🧱 Painéis Planos e Volumétricos 3D (`PanelRenderMode`)
-
-O WorldPanel suporta renderização plana convencional e blocos tridimensionais físicos no mundo:
-
-- `PanelRenderMode.FLAT_2D`: Painel plano clássico.
-- `PanelRenderMode.VOLUME_3D`: Painel volumétrico com **frente, laterais e traseira**, criando a aparência de uma placa espessa tridimensional.
-
-```kotlin
-val painelVolumetrico = FloatingWindow.builder()
-    .setShape(PanelShape.roundedRectangle(cornerRadius = 4f))
-    .setRenderMode(PanelRenderMode.VOLUME_3D)
-    .setVolume3D(
-        thickness = 3.0f,               // Espessura física no eixo Z
-        sideColor = null,                // Sombra automática baseada na cor frontal e luz
-        sideDarkening = 0.65f,           // Fator de tonalidade das laterais
-        lightAngleDegrees = 45f          // Ângulo da fonte de luz para relevo
-    )
-    .setBackground(WindowColor.Solid(0xFF2C3E50))
-    .setBorder(WindowColor.Solid(0xFF1ABC9C), width = 1f)
-    .addText("Painel 3D Volumétrico", WindowColor.Solid(0xFFFFFFFF))
-    .addSeparator()
-    .addText("Laterais com relevo físico")
-    .build()
-```
+*(Você também pode usar `FloatingWindow.builder().textOnly()` se quiser aproveitar o layout da janela com ícones de itens e textos sem renderizar fundo nem borda).*
 
 ---
 
 ## 🌈 Cores e Efeitos Visuais (`WindowColor`)
 
-A classe `WindowColor` é agnóstica de Minecraft e oferece diversos efeitos sem alocações contínuas de memória:
+Todas as cores de fundo, borda, separadores e textos aceitam efeitos visuais dinâmicos:
 
-* `WindowColor.Solid(argb: Long)`: Cor sólida (aceita `0xAARRGGBB` ou `0xRRGGBB`).
-* `WindowColor.Gradient(argbStart, argbEnd, isVertical)`: Gradiente estático linear ou vertical.
-* `WindowColor.Fade(colorA, colorB, speed)`: Transição periódica suave entre duas cores.
-* `WindowColor.Rainbow(speed, saturation, brightness)`: Efeito arco-íris animado.
-* `WindowColor.AnimatedGradient(argbStart, argbEnd, speed, scale)`: Gradiente em movimento contínuo.
-* `WindowColor.Pulse(color, minAlpha, speed)`: Pulsação de opacidade/brilho.
+- `WindowColor.Solid(argb: Long)` — Cor estática (`0xAARRGGBB` ou `0xRRGGBB`).
+- `WindowColor.Gradient(argbStart, argbEnd, isVertical)` — Gradiente linear estático.
+- `WindowColor.AnimatedGradient(argbStart, argbEnd, speed, scale)` — Gradiente em movimento contínuo.
+- `WindowColor.Rainbow(speed, saturation, brightness)` — Efeito arco-íris animado.
+- `WindowColor.Fade(colorA, colorB, speed)` — Transição suave alternando entre duas cores.
+- `WindowColor.Pulse(color, minAlpha, speed)` — Pulsação contínua de brilho/opacidade.
 
 ---
 
-## 🧪 Testes e Validação
+## 🤖 Nota de Transparência (Uso de IA)
 
-Execute os testes automatizados da biblioteca:
+Este projeto contou com o auxílio de Inteligência Artificial (IA) como ferramenta de assistência no desenvolvimento de código, cálculos geométricos, testes automatizados e elaboração da documentação.
 
-```bash
-./gradlew test
-```
+---
 
-Execute a compilação completa de todos os módulos:
+## 📄 Licença
 
-```bash
-./gradlew buildAll
-```
-
-Ambos os comandos executam com **100% de sucesso** e zero erros ou avisos de compilação.
+Distribuído sob a licença especificada no arquivo [LICENSE](LICENSE).
