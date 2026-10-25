@@ -14,8 +14,8 @@ Ideal for displaying **floating entity nametags**, **training dummy status panel
 
 ## 📚 Step-by-Step Guides
 
-- 📘 [**How to Create a Simple Window Step by Step (PT-BR)**](docs/janela_simples.md) — Complete guide with builder examples, sizing, padding, borders, item icons, automatic shape fitting, and rendering hooks.
-- 🔤 [**How to Create 3D Signs and Floating Text (PT-BR)**](docs/letreiro_e_texto_3d.md) — Guide showing how to render backgroundless floating text (`textOnly()`) and physically extruded 3D signs via `FloatingText`.
+- 📘 [**How to Create a Simple Window Step by Step**](docs/simple_window_en.md) — Complete guide with builder examples, sizing, padding, borders, item icons, automatic shape fitting, and rendering hooks.
+- 🔤 [**How to Create 3D Signs and Floating Text**](docs/3d_signs_and_text_en.md) — Guide showing how to render backgroundless floating text (`textOnly()`), animations, and physically extruded 3D signs via `FloatingText`.
 
 ---
 

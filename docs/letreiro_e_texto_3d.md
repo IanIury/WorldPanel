@@ -1,4 +1,4 @@
-# Guia: Como Renderizar Letreiro, Texto 3D e Animações no Mundo
+# Guia: Como Renderizar Letreiro, Texto 3D e Animações no Mundo [![English Version](https://img.shields.io/badge/lang-English%20Version-blue.svg)](3d_signs_and_text_en.md)
 
 Este guia ensina como renderizar **textos soltos** (sem placas ou janelas de fundo), criar **letreiros 3D com relevo físico**, aplicar **animações procedurais de movimento e rotação** (estilo item dropado ou patrulha entre pontos) e diagnosticar problemas de culling e visibilidade em **Entidades e Blocos (Block Entities)** usando o **WorldPanel**.
 
@@ -263,4 +263,3 @@ Valores recomendados de `extrusionDepth`:
 - `0.4f` a `0.6f`: Espessura sutil e elegante.
 - `0.8f` a `1.2f`: Letras em bloco 3D sólido (destaque volumétrico real).
 - `1.5f` a `2.5f`: Letreiro gigante com espessura profunda para visualização à distância.
-

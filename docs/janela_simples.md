@@ -1,4 +1,4 @@
-# Guia: Como Criar uma Janela Simples no WorldPanel
+# Guia: Como Criar uma Janela Simples no WorldPanel [![English Version](https://img.shields.io/badge/lang-English%20Version-blue.svg)](simple_window_en.md)
 
 Este guia ensina como criar, configurar e renderizar uma janela flutuante no mundo 3D do Minecraft usando a biblioteca **WorldPanel**.
 
