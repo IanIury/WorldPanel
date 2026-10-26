@@ -330,7 +330,8 @@ class FloatingWindow private constructor(
         val contentCollector = collector.order(renderOrder + 1)
 
         // Render back face if enabled and window is not billboarded (fixed orientation)
-        if (!faceCamera && renderBackFace) {
+        // Only applies to FLAT_2D panels; VOLUME_3D already has its physical back face at z = -thickness
+        if (!faceCamera && renderBackFace && panelRenderMode != dev.ian.worldpanel.shape.PanelRenderMode.VOLUME_3D) {
             poseStack.pushPose()
             val backZ = if (panelRenderMode == PanelRenderMode.VOLUME_3D) -volume3DConfig.thickness.toDouble() else -0.002
             poseStack.translate(panelBounds.centerX.toDouble(), 0.0, backZ)

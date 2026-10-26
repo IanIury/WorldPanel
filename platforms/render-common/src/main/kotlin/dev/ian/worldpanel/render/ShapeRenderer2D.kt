@@ -649,8 +649,7 @@ object ShapeRenderer2D {
         val lightDirX = cos(lightAngleRad).toFloat()
         val lightDirY = sin(lightAngleRad).toFloat()
 
-        // 1. Render back face at z = -thickness (both front-facing and rear-facing for 360° solid exterior)
-        renderFill(poseStack, buffer, shape, bounds, sideColor, 0f, cornerRadius, -thickness, packedLight)
+        // 1. Physical back face at z = -thickness facing outward (towards -Z, visible from behind with zero Z-fighting)
         poseStack.pushPose()
         poseStack.translate(bounds.centerX.toDouble(), 0.0, 0.0)
         poseStack.scale(-1f, 1f, 1f)

@@ -325,7 +325,8 @@ class FloatingWindow private constructor(
         }
 
         // Render back face if enabled and window is not billboarded (fixed orientation)
-        if (!faceCamera && renderBackFace) {
+        // Only applies to FLAT_2D panels; VOLUME_3D already has its physical back face at z = -thickness
+        if (!faceCamera && renderBackFace && panelRenderMode != dev.ian.worldpanel.shape.PanelRenderMode.VOLUME_3D) {
             poseStack.pushPose()
             poseStack.translate(panelBounds.centerX.toDouble(), 0.0, -0.002)
             poseStack.mulPose(com.mojang.math.Axis.YP.rotationDegrees(180f))
