@@ -6,6 +6,8 @@ import com.mojang.math.Axis
 import dev.ian.worldpanel.layout.MeasurableElement
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.Font
+import net.minecraft.client.renderer.state.level.CameraRenderState
+import net.minecraft.client.renderer.SubmitNodeCollector
 import net.minecraft.client.renderer.OrderedSubmitNodeCollector
 import net.minecraft.client.renderer.rendertype.RenderTypes
 import net.minecraft.network.chat.Component
@@ -13,6 +15,7 @@ import net.minecraft.network.chat.FontDescription
 import net.minecraft.network.chat.FormattedText
 import net.minecraft.network.chat.Style
 import net.minecraft.resources.Identifier
+import net.minecraft.world.entity.LivingEntity
 import net.minecraft.world.item.ItemStack
 import org.joml.Matrix4f
 import java.util.Optional
@@ -754,4 +757,189 @@ interface WindowElement : MeasurableElement {
         }
     }
 
+
+    /**
+     * Renders a 3D preview of a [LivingEntity] (e.g. inventory preview, mob bestiary, item inspect)
+     * with continuous rotation around the Y-axis and controlled pitch.
+     */
+    class EntityPreview(
+        private val entitySupplier: () -> LivingEntity?,
+        size: Float = 36f,
+        private val spinSpeed: Float = 1.0f,
+        private val pitchAngle: Float = 0f,
+        private val alignment: Text.TextAlignment = Text.TextAlignment.CENTER,
+    ) : WindowElement {
+        constructor(
+            entity: LivingEntity,
+            size: Float = 36f,
+            spinSpeed: Float = 1.0f,
+            pitchAngle: Float = 0f,
+            alignment: Text.TextAlignment = Text.TextAlignment.CENTER,
+        ) : this({ entity }, size, spinSpeed, pitchAngle, alignment)
+
+        private val safeSize = size.coerceAtLeast(1f)
+
+        override val alignmentRatio: Float
+            get() = when (alignment) {
+                Text.TextAlignment.LEFT -> 0f
+                Text.TextAlignment.CENTER -> 0.5f
+                Text.TextAlignment.RIGHT -> 1f
+            }
+
+        override fun getWidth(): Float = safeSize
+        override fun getHeight(): Float = safeSize
+
+        override fun render(
+            poseStack: PoseStack,
+            collector: OrderedSubmitNodeCollector,
+            x: Float,
+            y: Float,
+            availableWidth: Float,
+            packedLight: Int,
+            seeThrough: Boolean,
+        ) {
+            val entity = entitySupplier() ?: return
+            val drawX = x + when (alignment) {
+                Text.TextAlignment.LEFT -> 0f
+                Text.TextAlignment.CENTER -> max(0f, (availableWidth - safeSize) / 2f)
+                Text.TextAlignment.RIGHT -> max(0f, availableWidth - safeSize)
+            }
+
+            val dispatcher = Minecraft.getInstance().entityRenderDispatcher
+            val partialTick = Minecraft.getInstance().deltaTracker.getGameTimeDeltaPartialTick(false)
+            val time = WindowColor.currentTimeSeconds()
+            val rotY = (time * spinSpeed * 50.0 + 180.0) % 360.0
+
+            val maxDim = max(1f, max(entity.bbHeight, entity.bbWidth))
+            val scaleFactor = safeSize / maxDim
+
+            val renderState = dispatcher.extractEntity(entity, partialTick)
+            renderState.shadowPieces.clear()
+            renderState.shadowRadius = 0f
+            renderState.outlineColor = 0
+            if (renderState is net.minecraft.client.renderer.entity.state.LivingEntityRenderState) {
+                renderState.bodyRot = 0f
+                renderState.yRot = 0f
+                renderState.xRot = 0f
+                renderState.deathTime = 0f
+            }
+
+            val submitCollector: net.minecraft.client.renderer.SubmitNodeCollector =
+                (collector as? net.minecraft.client.renderer.SubmitNodeCollector)
+                    ?: object : net.minecraft.client.renderer.SubmitNodeCollector,
+                        OrderedSubmitNodeCollector by collector {
+                        override fun order(order: Int) = collector
+                    }
+
+            poseStack.pushPose()
+            poseStack.translate(drawX.toDouble() + safeSize / 2.0, y.toDouble() + safeSize, 0.05)
+            poseStack.scale(scaleFactor, -scaleFactor, scaleFactor)
+            poseStack.mulPose(Axis.YP.rotationDegrees(rotY.toFloat()))
+            if (pitchAngle != 0f) {
+                poseStack.mulPose(Axis.XP.rotationDegrees(pitchAngle))
+            }
+
+            try {
+                dispatcher.submit(
+                    renderState,
+                    CameraRenderState(),
+                    0.0,
+                    0.0,
+                    0.0,
+                    poseStack,
+                    submitCollector
+                )
+            } finally {
+                poseStack.popPose()
+            }
+        }
+    }
+
+    /**
+     * Mirrors a real live [LivingEntity] from the world (player, companion, boss) in real time,
+     * retaining equipment, animations, limb swing and damage red flash.
+     */
+    class LiveEntityMirror(
+        private val entitySupplier: () -> LivingEntity?,
+        size: Float = 36f,
+        private val mirrorRotation: Boolean = true,
+        private val alignment: Text.TextAlignment = Text.TextAlignment.CENTER,
+    ) : WindowElement {
+        constructor(
+            entity: LivingEntity,
+            size: Float = 36f,
+            mirrorRotation: Boolean = true,
+            alignment: Text.TextAlignment = Text.TextAlignment.CENTER,
+        ) : this({ entity }, size, mirrorRotation, alignment)
+
+        private val safeSize = size.coerceAtLeast(1f)
+
+        override val alignmentRatio: Float
+            get() = when (alignment) {
+                Text.TextAlignment.LEFT -> 0f
+                Text.TextAlignment.CENTER -> 0.5f
+                Text.TextAlignment.RIGHT -> 1f
+            }
+
+        override fun getWidth(): Float = safeSize
+        override fun getHeight(): Float = safeSize
+
+        override fun render(
+            poseStack: PoseStack,
+            collector: OrderedSubmitNodeCollector,
+            x: Float,
+            y: Float,
+            availableWidth: Float,
+            packedLight: Int,
+            seeThrough: Boolean,
+        ) {
+            val entity = entitySupplier() ?: return
+            if (entity.isRemoved || entity.isDeadOrDying) return
+
+            val drawX = x + when (alignment) {
+                Text.TextAlignment.LEFT -> 0f
+                Text.TextAlignment.CENTER -> max(0f, (availableWidth - safeSize) / 2f)
+                Text.TextAlignment.RIGHT -> max(0f, availableWidth - safeSize)
+            }
+
+            val dispatcher = Minecraft.getInstance().entityRenderDispatcher
+            val partialTick = Minecraft.getInstance().deltaTracker.getGameTimeDeltaPartialTick(false)
+
+            val maxDim = max(1f, max(entity.bbHeight, entity.bbWidth))
+            val scaleFactor = safeSize / maxDim
+
+            val renderState = dispatcher.extractEntity(entity, partialTick)
+            renderState.shadowPieces.clear()
+            renderState.shadowRadius = 0f
+            renderState.outlineColor = 0
+
+            val submitCollector: net.minecraft.client.renderer.SubmitNodeCollector =
+                (collector as? net.minecraft.client.renderer.SubmitNodeCollector)
+                    ?: object : net.minecraft.client.renderer.SubmitNodeCollector,
+                        OrderedSubmitNodeCollector by collector {
+                        override fun order(order: Int) = collector
+                    }
+
+            poseStack.pushPose()
+            poseStack.translate(drawX.toDouble() + safeSize / 2.0, y.toDouble() + safeSize, 0.05)
+            poseStack.scale(scaleFactor, -scaleFactor, scaleFactor)
+            if (mirrorRotation && renderState is net.minecraft.client.renderer.entity.state.LivingEntityRenderState) {
+                poseStack.mulPose(Axis.YP.rotationDegrees(renderState.bodyRot))
+            }
+
+            try {
+                dispatcher.submit(
+                    renderState,
+                    CameraRenderState(),
+                    0.0,
+                    0.0,
+                    0.0,
+                    poseStack,
+                    submitCollector
+                )
+            } finally {
+                poseStack.popPose()
+            }
+        }
+    }
 }

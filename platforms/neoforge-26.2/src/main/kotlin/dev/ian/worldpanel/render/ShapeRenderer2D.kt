@@ -186,6 +186,7 @@ object ShapeRenderer2D {
         cornerRadius: Float,
         z: Float,
         packedLight: Int,
+        invertWinding: Boolean = false,
     ) {
         if (background is WindowColor.Solid && background.resolve().a <= 0.001f) return
 
@@ -195,13 +196,13 @@ object ShapeRenderer2D {
                 val r = shape.maxRadius(bounds.width, bounds.height)
                 val fillRadius = max(0f, r - borderWidth)
                 if (fillBounds.width > 0.01f && fillBounds.height > 0.01f) {
-                    drawRoundedFill(matrix, builder, fillBounds.left, fillBounds.top, fillBounds.right, fillBounds.bottom, fillRadius, background, z, packedLight)
+                    drawRoundedFill(matrix, builder, fillBounds.left, fillBounds.top, fillBounds.right, fillBounds.bottom, fillRadius, background, z, packedLight, invertWinding)
                 }
             }
             shape is RectangleShape || shape is SquareShape -> {
                 val fillBounds = if (borderWidth > 0f) bounds.inset(borderWidth) else bounds
                 if (fillBounds.width > 0.01f && fillBounds.height > 0.01f) {
-                    drawQuad(matrix, builder, fillBounds.left, fillBounds.top, fillBounds.right, fillBounds.bottom, background, z, packedLight)
+                    drawQuad(matrix, builder, fillBounds.left, fillBounds.top, fillBounds.right, fillBounds.bottom, background, z, packedLight, invertWinding)
                 }
             }
             shape is CircleShape -> {
@@ -210,7 +211,7 @@ object ShapeRenderer2D {
                 val cy = bounds.top + bounds.height / 2f
                 val r = size / 2f - borderWidth
                 if (r > 0.05f) {
-                    drawCircleFill(matrix, builder, cx, cy, r, r, background, z, packedLight)
+                    drawCircleFill(matrix, builder, cx, cy, r, r, background, z, packedLight, invertWinding)
                 }
             }
             shape is EllipseShape -> {
@@ -219,7 +220,7 @@ object ShapeRenderer2D {
                 val rx = bounds.width / 2f - borderWidth
                 val ry = bounds.height / 2f - borderWidth
                 if (rx > 0.05f && ry > 0.05f) {
-                    drawCircleFill(matrix, builder, cx, cy, rx, ry, background, z, packedLight)
+                    drawCircleFill(matrix, builder, cx, cy, rx, ry, background, z, packedLight, invertWinding)
                 }
             }
             else -> {
@@ -227,10 +228,10 @@ object ShapeRenderer2D {
                 if (polygon != null) {
                     val fillPoly = if (borderWidth > 0f) polygon.computeInset(borderWidth) else polygon
                     if (fillPoly != null) {
-                        renderPolygonFill(matrix, builder, fillPoly, bounds, background, z, packedLight)
+                        renderPolygonFill(matrix, builder, fillPoly, bounds, background, z, packedLight, invertWinding)
                     }
                 } else {
-                    drawQuad(matrix, builder, bounds.left, bounds.top, bounds.right, bounds.bottom, background, z, packedLight)
+                    drawQuad(matrix, builder, bounds.left, bounds.top, bounds.right, bounds.bottom, background, z, packedLight, invertWinding)
                 }
             }
         }
@@ -351,6 +352,7 @@ object ShapeRenderer2D {
         color: WindowColor,
         z: Float,
         packedLight: Int,
+        invertWinding: Boolean = false,
     ) {
         val time = WindowColor.currentTimeSeconds()
         val centerColor = color.resolve(0.5f, 0.5f, time)
@@ -371,10 +373,17 @@ object ShapeRenderer2D {
             val c1 = color.resolve((x1 - cx + rx) / (2f * rx), (y1 - cy + ry) / (2f * ry), time)
             val c2 = color.resolve((x2 - cx + rx) / (2f * rx), (y2 - cy + ry) / (2f * ry), time)
 
-            addVertex(builder, matrix, cx, cy, z, centerColor, packedLight)
-            addVertex(builder, matrix, x2, y2, z, c2, packedLight)
-            addVertex(builder, matrix, x1, y1, z, c1, packedLight)
-            addVertex(builder, matrix, x0, y0, z, c0, packedLight)
+            if (invertWinding) {
+                addVertex(builder, matrix, cx, cy, z, centerColor, packedLight)
+                addVertex(builder, matrix, x0, y0, z, c0, packedLight)
+                addVertex(builder, matrix, x1, y1, z, c1, packedLight)
+                addVertex(builder, matrix, x2, y2, z, c2, packedLight)
+            } else {
+                addVertex(builder, matrix, cx, cy, z, centerColor, packedLight)
+                addVertex(builder, matrix, x2, y2, z, c2, packedLight)
+                addVertex(builder, matrix, x1, y1, z, c1, packedLight)
+                addVertex(builder, matrix, x0, y0, z, c0, packedLight)
+            }
         }
     }
 
@@ -389,6 +398,7 @@ object ShapeRenderer2D {
         color: WindowColor,
         z: Float,
         packedLight: Int,
+        invertWinding: Boolean = false,
     ) {
         val totalWidth = right - left
         val totalHeight = bottom - top
@@ -397,7 +407,7 @@ object ShapeRenderer2D {
         val maxR = min(totalWidth, totalHeight) / 2f
         val safeR = radius.coerceIn(0f, maxR)
         if (safeR <= 0.05f) {
-            drawQuad(matrix, builder, left, top, right, bottom, color, z, packedLight)
+            drawQuad(matrix, builder, left, top, right, bottom, color, z, packedLight, invertWinding)
             return
         }
 
@@ -413,10 +423,17 @@ object ShapeRenderer2D {
             val c11 = colorAt(x1, y1)
             val c10 = colorAt(x1, y0)
 
-            addVertex(builder, matrix, x0, y0, z, c00, packedLight)
-            addVertex(builder, matrix, x0, y1, z, c01, packedLight)
-            addVertex(builder, matrix, x1, y1, z, c11, packedLight)
-            addVertex(builder, matrix, x1, y0, z, c10, packedLight)
+            if (invertWinding) {
+                addVertex(builder, matrix, x0, y0, z, c00, packedLight)
+                addVertex(builder, matrix, x1, y0, z, c10, packedLight)
+                addVertex(builder, matrix, x1, y1, z, c11, packedLight)
+                addVertex(builder, matrix, x0, y1, z, c01, packedLight)
+            } else {
+                addVertex(builder, matrix, x0, y0, z, c00, packedLight)
+                addVertex(builder, matrix, x0, y1, z, c01, packedLight)
+                addVertex(builder, matrix, x1, y1, z, c11, packedLight)
+                addVertex(builder, matrix, x1, y0, z, c10, packedLight)
+            }
         }
 
         fun emitCornerFan(cx: Float, cy: Float, startAngle: Double) {
@@ -438,10 +455,17 @@ object ShapeRenderer2D {
                 val c1 = colorAt(x1, y1)
                 val c2 = colorAt(x2, y2)
 
-                addVertex(builder, matrix, cx, cy, z, centerColor, packedLight)
-                addVertex(builder, matrix, x2, y2, z, c2, packedLight)
-                addVertex(builder, matrix, x1, y1, z, c1, packedLight)
-                addVertex(builder, matrix, x0, y0, z, c0, packedLight)
+                if (invertWinding) {
+                    addVertex(builder, matrix, cx, cy, z, centerColor, packedLight)
+                    addVertex(builder, matrix, x0, y0, z, c0, packedLight)
+                    addVertex(builder, matrix, x1, y1, z, c1, packedLight)
+                    addVertex(builder, matrix, x2, y2, z, c2, packedLight)
+                } else {
+                    addVertex(builder, matrix, cx, cy, z, centerColor, packedLight)
+                    addVertex(builder, matrix, x2, y2, z, c2, packedLight)
+                    addVertex(builder, matrix, x1, y1, z, c1, packedLight)
+                    addVertex(builder, matrix, x0, y0, z, c0, packedLight)
+                }
             }
         }
 
@@ -567,7 +591,7 @@ object ShapeRenderer2D {
 
     /**
      * Renders polygon fill by assembling pairs of adjacent fan triangles into quads.
-     * Quad vertices are emitted in front-facing winding order.
+     * Quad vertices are emitted in front-facing winding order (or reversed when invertWinding is true).
      */
     private fun renderPolygonFill(
         matrix: Matrix4f,
@@ -577,6 +601,7 @@ object ShapeRenderer2D {
         color: WindowColor,
         z: Float,
         packedLight: Int,
+        invertWinding: Boolean = false,
     ) {
         val vertices = polygon.vertices
         val count = vertices.size
@@ -614,10 +639,17 @@ object ShapeRenderer2D {
                 val x3 = bounds.left + v3.x
                 val y3 = bounds.top + v3.y
 
-                addVertex(builder, matrix, x0, y0, z, c0, packedLight)
-                addVertex(builder, matrix, x3, y3, z, c3, packedLight)
-                addVertex(builder, matrix, x2, y2, z, c2, packedLight)
-                addVertex(builder, matrix, x1, y1, z, c1, packedLight)
+                if (invertWinding) {
+                    addVertex(builder, matrix, x0, y0, z, c0, packedLight)
+                    addVertex(builder, matrix, x1, y1, z, c1, packedLight)
+                    addVertex(builder, matrix, x2, y2, z, c2, packedLight)
+                    addVertex(builder, matrix, x3, y3, z, c3, packedLight)
+                } else {
+                    addVertex(builder, matrix, x0, y0, z, c0, packedLight)
+                    addVertex(builder, matrix, x3, y3, z, c3, packedLight)
+                    addVertex(builder, matrix, x2, y2, z, c2, packedLight)
+                    addVertex(builder, matrix, x1, y1, z, c1, packedLight)
+                }
                 i += 2
             } else {
                 // Odd remaining triangle (v0, v[i], v[i+1]):
@@ -632,10 +664,17 @@ object ShapeRenderer2D {
                 val x2 = bounds.left + v2.x
                 val y2 = bounds.top + v2.y
 
-                addVertex(builder, matrix, x0, y0, z, c0, packedLight)
-                addVertex(builder, matrix, x2, y2, z, c2, packedLight)
-                addVertex(builder, matrix, x1, y1, z, c1, packedLight)
-                addVertex(builder, matrix, x0, y0, z, c0, packedLight)
+                if (invertWinding) {
+                    addVertex(builder, matrix, x0, y0, z, c0, packedLight)
+                    addVertex(builder, matrix, x1, y1, z, c1, packedLight)
+                    addVertex(builder, matrix, x2, y2, z, c2, packedLight)
+                    addVertex(builder, matrix, x0, y0, z, c0, packedLight)
+                } else {
+                    addVertex(builder, matrix, x0, y0, z, c0, packedLight)
+                    addVertex(builder, matrix, x2, y2, z, c2, packedLight)
+                    addVertex(builder, matrix, x1, y1, z, c1, packedLight)
+                    addVertex(builder, matrix, x0, y0, z, c0, packedLight)
+                }
                 i += 1
             }
         }
@@ -660,9 +699,8 @@ object ShapeRenderer2D {
         val lightDirX = cos(lightAngleRad).toFloat()
         val lightDirY = sin(lightAngleRad).toFloat()
 
-        // 1. Physical back face at z = -thickness facing outward (towards -Z, visible from behind with zero Z-fighting)
-        val backMatrix = Matrix4f(matrix).translate(bounds.centerX, 0f, 0f).scale(-1f, 1f, 1f).translate(-bounds.centerX, 0f, 0f)
-        renderFill(backMatrix, builder, shape, bounds, sideColor, 0f, cornerRadius, -thickness, packedLight)
+        // 1. Physical back face at z = -thickness facing outward (inverted winding order preserves geometry of asymmetric shapes)
+        renderFill(matrix, builder, shape, bounds, sideColor, 0f, cornerRadius, -thickness, packedLight, invertWinding = true)
 
         // 2. Side wall quads around polygon perimeter
         val polygon = shape.toPolygon(bounds.width, bounds.height) ?: return
@@ -802,6 +840,7 @@ object ShapeRenderer2D {
         color: WindowColor,
         z: Float,
         packedLight: Int,
+        invertWinding: Boolean = false,
     ) {
         val time = WindowColor.currentTimeSeconds()
         val c0 = color.resolve(0f, 0f, time)
@@ -809,10 +848,19 @@ object ShapeRenderer2D {
         val c2 = color.resolve(1f, 1f, time)
         val c3 = color.resolve(1f, 0f, time)
 
-        addVertex(builder, matrix, left, top, z, c0, packedLight)
-        addVertex(builder, matrix, left, bottom, z, c1, packedLight)
-        addVertex(builder, matrix, right, bottom, z, c2, packedLight)
-        addVertex(builder, matrix, right, top, z, c3, packedLight)
+        if (invertWinding) {
+            // (v0, v3, v2, v1)
+            addVertex(builder, matrix, left, top, z, c0, packedLight)
+            addVertex(builder, matrix, right, top, z, c3, packedLight)
+            addVertex(builder, matrix, right, bottom, z, c2, packedLight)
+            addVertex(builder, matrix, left, bottom, z, c1, packedLight)
+        } else {
+            // (v0, v1, v2, v3)
+            addVertex(builder, matrix, left, top, z, c0, packedLight)
+            addVertex(builder, matrix, left, bottom, z, c1, packedLight)
+            addVertex(builder, matrix, right, bottom, z, c2, packedLight)
+            addVertex(builder, matrix, right, top, z, c3, packedLight)
+        }
     }
 
     private fun addVertex(

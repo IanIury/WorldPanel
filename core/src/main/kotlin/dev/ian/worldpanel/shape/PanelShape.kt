@@ -438,14 +438,25 @@ data class TriangleShape(
         RIGHT
     }
 
-    override val id: String = "triangle_${variant.name.lowercase()}"
+    override val id: String = "triangle_${variant.name.lowercase()}_${pointing.name.lowercase()}_${corner.name.lowercase()}"
 
     override fun computeContentBounds(width: Float, height: Float, padding: Float): RectF {
         val safePadding = padding.coerceAtLeast(0f)
-        val innerW = (width * 0.5f - safePadding * 2f).coerceAtLeast(0f)
-        val innerH = (height * 0.4f - safePadding * 2f).coerceAtLeast(0f)
-        val cx = width / 2f
-        val cy = height * 0.6f
+        val isHorizontal = variant != Variant.RIGHT && (pointing == ShapeDirection.LEFT || pointing == ShapeDirection.RIGHT)
+        val innerW = ((if (isHorizontal) width * 0.4f else width * 0.5f) - safePadding * 2f).coerceAtLeast(0f)
+        val innerH = ((if (isHorizontal) height * 0.5f else height * 0.4f) - safePadding * 2f).coerceAtLeast(0f)
+        val (cx, cy) = when {
+            variant == Variant.RIGHT -> when (corner) {
+                ShapeCorner.BOTTOM_LEFT -> Pair(width * 0.4f, height * 0.6f)
+                ShapeCorner.BOTTOM_RIGHT -> Pair(width * 0.6f, height * 0.6f)
+                ShapeCorner.TOP_LEFT -> Pair(width * 0.4f, height * 0.4f)
+                ShapeCorner.TOP_RIGHT -> Pair(width * 0.6f, height * 0.4f)
+            }
+            pointing == ShapeDirection.DOWN -> Pair(width / 2f, height * 0.4f)
+            pointing == ShapeDirection.LEFT -> Pair(width * 0.6f, height / 2f)
+            pointing == ShapeDirection.RIGHT -> Pair(width * 0.4f, height / 2f)
+            else -> Pair(width / 2f, height * 0.6f)
+        }
         return RectF(cx - innerW / 2f, cy - innerH / 2f, cx + innerW / 2f, cy + innerH / 2f)
     }
 

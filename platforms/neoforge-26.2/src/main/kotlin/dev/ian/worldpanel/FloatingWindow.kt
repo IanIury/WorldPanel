@@ -33,6 +33,7 @@ import net.minecraft.client.renderer.SubmitNodeCollector
 import net.minecraft.core.Direction
 import net.minecraft.network.chat.Component
 import net.minecraft.resources.Identifier
+import net.minecraft.world.entity.LivingEntity
 import net.minecraft.world.entity.Entity
 import net.minecraft.world.item.ItemStack
 import kotlin.math.max
@@ -1300,6 +1301,68 @@ class FloatingWindow private constructor(
                 element = WindowElement.ItemGrid(items, columns, slotSize, spacing, slotBackground, slotBorder, alignment),
                 position = null,
                 targetRegion = null
+            )
+        }
+
+        fun addEntityPreview(
+            entity: LivingEntity,
+            size: Float = 36f,
+            spinSpeed: Float = 1.0f,
+            pitchAngle: Float = 0f,
+            alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
+            region: String? = null,
+            position: ElementPosition? = null,
+        ) = apply {
+            addElementInternal(
+                WindowElement.EntityPreview(entity, size, spinSpeed, pitchAngle, alignment),
+                position = position,
+                region = region
+            )
+        }
+
+        fun addEntityPreview(
+            size: Float = 36f,
+            spinSpeed: Float = 1.0f,
+            pitchAngle: Float = 0f,
+            alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
+            region: String? = null,
+            position: ElementPosition? = null,
+            entitySupplier: () -> LivingEntity?,
+        ) = apply {
+            addElementInternal(
+                WindowElement.EntityPreview(entitySupplier, size, spinSpeed, pitchAngle, alignment),
+                position = position,
+                region = region
+            )
+        }
+
+        fun addLiveEntityMirror(
+            entity: LivingEntity,
+            size: Float = 36f,
+            mirrorRotation: Boolean = true,
+            alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
+            region: String? = null,
+            position: ElementPosition? = null,
+        ) = apply {
+            addElementInternal(
+                WindowElement.LiveEntityMirror(entity, size, mirrorRotation, alignment),
+                position = position,
+                region = region
+            )
+        }
+
+        fun addLiveEntityMirror(
+            size: Float = 36f,
+            mirrorRotation: Boolean = true,
+            alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
+            region: String? = null,
+            position: ElementPosition? = null,
+            entitySupplier: () -> LivingEntity?,
+        ) = apply {
+            addElementInternal(
+                WindowElement.LiveEntityMirror(entitySupplier, size, mirrorRotation, alignment),
+                position = position,
+                region = region
             )
         }
 

@@ -130,6 +130,31 @@ class PanelShapeTest {
     }
 
     @Test
+    fun `triangle id and directional content bounds vary by orientation`() {
+        val up = TriangleShape(TriangleShape.Variant.EQUILATERAL, pointing = ShapeDirection.UP)
+        assertEquals("triangle_equilateral_up_bottom_left", up.id)
+        val upBounds = up.computeContentBounds(100f, 100f, 0f)
+        assertEquals(60f, upBounds.centerY, 0.01f)
+
+        val down = TriangleShape(TriangleShape.Variant.EQUILATERAL, pointing = ShapeDirection.DOWN)
+        assertEquals("triangle_equilateral_down_bottom_left", down.id)
+        val downBounds = down.computeContentBounds(100f, 100f, 0f)
+        assertEquals(40f, downBounds.centerY, 0.01f)
+
+        val left = TriangleShape(TriangleShape.Variant.ISOSCELES, pointing = ShapeDirection.LEFT)
+        assertEquals("triangle_isosceles_left_bottom_left", left.id)
+        val leftBounds = left.computeContentBounds(100f, 100f, 0f)
+        assertEquals(60f, leftBounds.centerX, 0.01f)
+        assertEquals(50f, leftBounds.centerY, 0.01f)
+
+        val right = TriangleShape(TriangleShape.Variant.ISOSCELES, pointing = ShapeDirection.RIGHT)
+        assertEquals("triangle_isosceles_right_bottom_left", right.id)
+        val rightBounds = right.computeContentBounds(100f, 100f, 0f)
+        assertEquals(40f, rightBounds.centerX, 0.01f)
+        assertEquals(50f, rightBounds.centerY, 0.01f)
+    }
+
+    @Test
     fun `rhombus trapezoid and parallelogram triangulate properly`() {
         val rhombus = RhombusShape.toPolygon(100f, 100f)
         assertEquals(4, rhombus.vertices.size)
