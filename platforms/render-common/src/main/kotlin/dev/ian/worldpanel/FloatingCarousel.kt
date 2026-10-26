@@ -2,7 +2,11 @@ package dev.ian.worldpanel
 
 import com.mojang.blaze3d.vertex.PoseStack
 import com.mojang.math.Axis
+import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.MultiBufferSource
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
  * A composite 3D object arranging [panelCount] panels in a circular carousel/ring facing outwards.
@@ -20,7 +24,7 @@ class FloatingCarousel private constructor(
     val panels: Map<Int, FloatingWindow>,
     val spinSpeedY: Float,
     initialTargetPanel: Int?,
-    val transitionSpeed: Float,
+    var transitionSpeed: Float,
 ) {
     private var targetPanel: Int? = initialTargetPanel
     private var currentYaw: Float = if (initialTargetPanel != null) -initialTargetPanel * (360f / panelCount) else 0f
@@ -30,7 +34,10 @@ class FloatingCarousel private constructor(
 
     fun targetPanel(index: Int, transitionSpeed: Float = 5.0f) {
         this.targetPanel = (index % panelCount + panelCount) % panelCount
+        this.transitionSpeed = transitionSpeed
     }
+
+    fun setTargetPanel(index: Int, transitionSpeed: Float = 5.0f) = targetPanel(index, transitionSpeed)
 
     fun nextPanel(transitionSpeed: Float = 5.0f) {
         val next = ((targetPanel ?: 0) + 1) % panelCount
@@ -67,6 +74,9 @@ class FloatingCarousel private constructor(
         }
         lastTimeSeconds = timeSeconds
 
+        val camera = Minecraft.getInstance().gameRenderer.mainCamera
+        val cameraPos = camera.position
+
         poseStack.pushPose()
         poseStack.translate(offsetX, offsetY, offsetZ)
 
@@ -74,6 +84,27 @@ class FloatingCarousel private constructor(
 
         for ((index, window) in panels) {
             val angle = index * (360f / panelCount)
+            val totalAngle = angle + rotYaw
+            val rad = Math.toRadians(totalAngle.toDouble())
+            val normX = sin(rad)
+            val normZ = cos(rad)
+
+            val faceCenterX = offsetX + normX * radius
+            val faceCenterY = offsetY
+            val faceCenterZ = offsetZ + normZ * radius
+
+            val toCamX = cameraPos.x - faceCenterX
+            val toCamY = cameraPos.y - faceCenterY
+            val toCamZ = cameraPos.z - faceCenterZ
+            val dist = sqrt(toCamX * toCamX + toCamY * toCamY + toCamZ * toCamZ)
+
+            if (dist > 0.0001 && !window.seeThrough && !window.renderBackFace) {
+                val dot = (normX * toCamX + normZ * toCamZ) / dist
+                if (dot <= 0.0) {
+                    continue
+                }
+            }
+
             poseStack.pushPose()
             poseStack.mulPose(Axis.YP.rotationDegrees(angle))
             poseStack.translate(0.0, 0.0, radius)
@@ -124,6 +155,8 @@ class FloatingCarousel private constructor(
             this.targetPanel = index
             this.transitionSpeed = transitionSpeed
         }
+
+        fun setTargetPanel(index: Int, transitionSpeed: Float = 5.0f) = targetPanel(index, transitionSpeed)
 
         fun clearTargetPanel() = apply { this.targetPanel = null }
 

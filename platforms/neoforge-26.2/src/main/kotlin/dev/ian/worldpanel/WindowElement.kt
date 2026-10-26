@@ -39,6 +39,7 @@ interface WindowElement : MeasurableElement {
         y: Float,
         availableWidth: Float,
         packedLight: Int,
+        seeThrough: Boolean = false,
     )
 
     class Text(
@@ -84,6 +85,7 @@ interface WindowElement : MeasurableElement {
             y: Float,
             availableWidth: Float,
             packedLight: Int,
+            seeThrough: Boolean,
         ) {
             val textWidth = getWidth()
             val drawX = x + when (alignment) {
@@ -108,14 +110,14 @@ interface WindowElement : MeasurableElement {
 
                     poseStack.pushPose()
                     poseStack.translate(0.0, 0.0, sliceZ.toDouble())
-                    drawTextInternal(poseStack, collector, packedLight, depthShading, drawShadow = false)
+                    drawTextInternal(poseStack, collector, packedLight, depthShading, drawShadow = false, seeThrough = seeThrough)
                     poseStack.popPose()
                 }
 
                 // Front face at Z = totalDepth
                 poseStack.pushPose()
                 poseStack.translate(0.0, 0.0, totalDepth.toDouble())
-                drawTextInternal(poseStack, collector, packedLight, 1.0f, drawShadow = shadow)
+                drawTextInternal(poseStack, collector, packedLight, 1.0f, drawShadow = shadow, seeThrough = seeThrough)
                 poseStack.popPose()
 
                 // Back face at Z = 0 rotated 180 degrees
@@ -123,11 +125,11 @@ interface WindowElement : MeasurableElement {
                 poseStack.pushPose()
                 poseStack.translate(unscaledW, 0.0, 0.0)
                 poseStack.mulPose(Axis.YP.rotationDegrees(180f))
-                drawTextInternal(poseStack, collector, packedLight, 0.90f, drawShadow = shadow)
+                drawTextInternal(poseStack, collector, packedLight, 0.90f, drawShadow = shadow, seeThrough = seeThrough)
                 poseStack.popPose()
             } else {
                 // Flat 2D text
-                drawTextInternal(poseStack, collector, packedLight, 1.0f, drawShadow = shadow)
+                drawTextInternal(poseStack, collector, packedLight, 1.0f, drawShadow = shadow, seeThrough = seeThrough)
             }
 
             poseStack.popPose()
@@ -139,7 +141,9 @@ interface WindowElement : MeasurableElement {
             packedLight: Int,
             brightness: Float,
             drawShadow: Boolean = shadow,
+            seeThrough: Boolean = false,
         ) {
+            val displayMode = if (seeThrough) Font.DisplayMode.SEE_THROUGH else Font.DisplayMode.POLYGON_OFFSET
             if (color is WindowColor.Solid) {
                 val base = color.resolve()
                 val shaded = WindowColor.RGBA(base.r * brightness, base.g * brightness, base.b * brightness, base.a)
@@ -149,14 +153,14 @@ interface WindowElement : MeasurableElement {
                     0f,
                     styledText.visualOrderText,
                     drawShadow,
-                    Font.DisplayMode.POLYGON_OFFSET,
+                    displayMode,
                     packedLight,
                     shaded.toArgb(),
                     0,
                     0
                 )
             } else {
-                drawAnimatedText(poseStack, collector, packedLight, brightness, drawShadow)
+                drawAnimatedText(poseStack, collector, packedLight, brightness, drawShadow, seeThrough)
             }
         }
 
@@ -166,7 +170,9 @@ interface WindowElement : MeasurableElement {
             packedLight: Int,
             brightness: Float,
             drawShadow: Boolean,
+            seeThrough: Boolean = false,
         ) {
+            val displayMode = if (seeThrough) Font.DisplayMode.SEE_THROUGH else Font.DisplayMode.POLYGON_OFFSET
             var currentX = 0f
             val fullWidth = font.width(styledText).toFloat().coerceAtLeast(1f)
             styledText.visit(
@@ -184,7 +190,7 @@ interface WindowElement : MeasurableElement {
                             0f,
                             glyphComponent.visualOrderText,
                             drawShadow,
-                            Font.DisplayMode.POLYGON_OFFSET,
+                            displayMode,
                             packedLight,
                             shaded.toArgb(),
                             0,
@@ -220,6 +226,7 @@ interface WindowElement : MeasurableElement {
             y: Float,
             availableWidth: Float,
             packedLight: Int,
+            seeThrough: Boolean,
         ) {
             if (stack.isEmpty) return
 
@@ -247,6 +254,7 @@ interface WindowElement : MeasurableElement {
             y: Float,
             availableWidth: Float,
             packedLight: Int,
+            seeThrough: Boolean,
         ) {
             collector.submitCustomGeometry(poseStack, RenderTypes.entityCutout(texture)) { pose, builder ->
                 val matrix = pose.pose()
@@ -295,6 +303,7 @@ interface WindowElement : MeasurableElement {
             y: Float,
             availableWidth: Float,
             packedLight: Int,
+            seeThrough: Boolean,
         ) = Unit
     }
 
@@ -321,6 +330,7 @@ interface WindowElement : MeasurableElement {
             y: Float,
             availableWidth: Float,
             packedLight: Int,
+            seeThrough: Boolean,
         ) {
             val drawWidth = availableWidth.coerceAtLeast(0f)
             if (drawWidth <= 0f) return
@@ -332,8 +342,9 @@ interface WindowElement : MeasurableElement {
             val bottomLeft = color.resolve(0f, 1f, time)
             val bottomRight = color.resolve(1f, 1f, time)
             val topRight = color.resolve(1f, 0f, time)
+            val renderType = if (seeThrough) RenderTypes.textBackgroundSeeThrough() else RenderTypes.textBackground()
 
-            collector.submitCustomGeometry(poseStack, RenderTypes.textBackground()) { pose, builder ->
+            collector.submitCustomGeometry(poseStack, renderType) { pose, builder ->
                 val matrix = pose.pose()
                 builder.addVertex(matrix, x, top, 0.05f).setColor(topLeft.r, topLeft.g, topLeft.b, topLeft.a).setLight(packedLight)
                 builder.addVertex(matrix, x, bottom, 0.05f).setColor(bottomLeft.r, bottomLeft.g, bottomLeft.b, bottomLeft.a).setLight(packedLight)
@@ -377,6 +388,7 @@ interface WindowElement : MeasurableElement {
             y: Float,
             availableWidth: Float,
             packedLight: Int,
+            seeThrough: Boolean,
         ) {
             val totalWidth = getWidth()
             var currentX = x + when (alignment) {
@@ -396,7 +408,8 @@ interface WindowElement : MeasurableElement {
                     x = currentX,
                     y = offsetY,
                     availableWidth = element.getWidth(),
-                    packedLight = packedLight
+                    packedLight = packedLight,
+                    seeThrough = seeThrough,
                 )
                 currentX += element.getWidth() + safeSpacing
             }
@@ -437,6 +450,7 @@ interface WindowElement : MeasurableElement {
             y: Float,
             availableWidth: Float,
             packedLight: Int,
+            seeThrough: Boolean,
         ) {
             val drawX = x + when (alignment) {
                 Text.TextAlignment.LEFT -> 0f
@@ -445,8 +459,9 @@ interface WindowElement : MeasurableElement {
             }
 
             val time = WindowColor.currentTimeSeconds()
+            val renderType = if (seeThrough) RenderTypes.textBackgroundSeeThrough() else RenderTypes.textBackground()
 
-            collector.submitCustomGeometry(poseStack, net.minecraft.client.renderer.rendertype.RenderTypes.textBackground()) { pose, builder ->
+            collector.submitCustomGeometry(poseStack, renderType) { pose, builder ->
                 val matrix = pose.pose()
                 // 1. Background
                 val bgTL = backgroundColor.resolve(0f, 0f, time)
@@ -545,6 +560,7 @@ interface WindowElement : MeasurableElement {
             y: Float,
             availableWidth: Float,
             packedLight: Int,
+            seeThrough: Boolean,
         ) {
             val totalW = getWidth()
             val drawX = x + when (alignment) {
@@ -558,11 +574,12 @@ interface WindowElement : MeasurableElement {
             val rOuter = safeRadius
             val rInner = safeRadius - safeThickness
             val time = WindowColor.currentTimeSeconds()
+            val renderType = if (seeThrough) RenderTypes.textBackgroundSeeThrough() else RenderTypes.textBackground()
 
             val segments = 36
             val startRad = startAngleDegrees * (kotlin.math.PI.toFloat() / 180f)
 
-            collector.submitCustomGeometry(poseStack, net.minecraft.client.renderer.rendertype.RenderTypes.textBackground()) { pose, builder ->
+            collector.submitCustomGeometry(poseStack, renderType) { pose, builder ->
                 val matrix = pose.pose()
                 // 1. Background ring
                 for (i in 0 until segments) {
@@ -655,6 +672,7 @@ interface WindowElement : MeasurableElement {
             y: Float,
             availableWidth: Float,
             packedLight: Int,
+            seeThrough: Boolean,
         ) {
             val drawX = x + when (alignment) {
                 Text.TextAlignment.LEFT -> 0f
@@ -663,10 +681,11 @@ interface WindowElement : MeasurableElement {
             }
 
             val time = WindowColor.currentTimeSeconds()
+            val renderType = if (seeThrough) RenderTypes.textBackgroundSeeThrough() else RenderTypes.textBackground()
 
             // 1. Draw slot background boxes and borders if present
             if (slotBackground != null || slotBorder != null) {
-                collector.submitCustomGeometry(poseStack, net.minecraft.client.renderer.rendertype.RenderTypes.textBackground()) { pose, builder ->
+                collector.submitCustomGeometry(poseStack, renderType) { pose, builder ->
                     val matrix = pose.pose()
                     for (row in 0 until rows) {
                         for (col in 0 until safeCols) {

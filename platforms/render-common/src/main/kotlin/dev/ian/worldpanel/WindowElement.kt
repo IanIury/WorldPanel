@@ -45,6 +45,7 @@ interface WindowElement : MeasurableElement {
         y: Float,
         availableWidth: Float,
         packedLight: Int,
+        seeThrough: Boolean = false,
     )
 
     class Text(
@@ -90,6 +91,7 @@ interface WindowElement : MeasurableElement {
             y: Float,
             availableWidth: Float,
             packedLight: Int,
+            seeThrough: Boolean,
         ) {
             val textWidth = getWidth()
             val drawX = x + when (alignment) {
@@ -114,14 +116,14 @@ interface WindowElement : MeasurableElement {
 
                     poseStack.pushPose()
                     poseStack.translate(0.0, 0.0, sliceZ.toDouble())
-                    drawTextInternal(poseStack.last().pose(), buffer, packedLight, depthShading, drawShadow = false)
+                    drawTextInternal(poseStack.last().pose(), buffer, packedLight, depthShading, drawShadow = false, seeThrough = seeThrough)
                     poseStack.popPose()
                 }
 
                 // Front face
                 poseStack.pushPose()
                 poseStack.translate(0.0, 0.0, totalDepth.toDouble())
-                drawTextInternal(poseStack.last().pose(), buffer, packedLight, 1.0f, drawShadow = shadow)
+                drawTextInternal(poseStack.last().pose(), buffer, packedLight, 1.0f, drawShadow = shadow, seeThrough = seeThrough)
                 poseStack.popPose()
 
                 // Back face rotated 180°
@@ -129,10 +131,10 @@ interface WindowElement : MeasurableElement {
                 poseStack.pushPose()
                 poseStack.translate(unscaledW, 0.0, 0.0)
                 poseStack.mulPose(Axis.YP.rotationDegrees(180f))
-                drawTextInternal(poseStack.last().pose(), buffer, packedLight, 0.90f, drawShadow = shadow)
+                drawTextInternal(poseStack.last().pose(), buffer, packedLight, 0.90f, drawShadow = shadow, seeThrough = seeThrough)
                 poseStack.popPose()
             } else {
-                drawTextInternal(poseStack.last().pose(), buffer, packedLight, 1.0f, drawShadow = shadow)
+                drawTextInternal(poseStack.last().pose(), buffer, packedLight, 1.0f, drawShadow = shadow, seeThrough = seeThrough)
             }
 
             poseStack.popPose()
@@ -144,7 +146,9 @@ interface WindowElement : MeasurableElement {
             packedLight: Int,
             brightness: Float,
             drawShadow: Boolean = shadow,
+            seeThrough: Boolean = false,
         ) {
+            val displayMode = if (seeThrough) Font.DisplayMode.SEE_THROUGH else Font.DisplayMode.NORMAL
             if (color is WindowColor.Solid) {
                 val base = color.resolve()
                 val shaded = WindowColor.RGBA(base.r * brightness, base.g * brightness, base.b * brightness, base.a)
@@ -156,12 +160,12 @@ interface WindowElement : MeasurableElement {
                     drawShadow,
                     matrix,
                     buffer,
-                    Font.DisplayMode.NORMAL,
+                    displayMode,
                     0,
                     packedLight,
                 )
             } else {
-                drawAnimatedText(matrix, buffer, packedLight, brightness, drawShadow)
+                drawAnimatedText(matrix, buffer, packedLight, brightness, drawShadow, seeThrough)
             }
         }
 
@@ -171,7 +175,9 @@ interface WindowElement : MeasurableElement {
             packedLight: Int,
             brightness: Float,
             drawShadow: Boolean,
+            seeThrough: Boolean = false,
         ) {
+            val displayMode = if (seeThrough) Font.DisplayMode.SEE_THROUGH else Font.DisplayMode.NORMAL
             var currentX = 0f
             val fullWidth = font.width(styledText).toFloat().coerceAtLeast(1f)
             styledText.visit(
@@ -191,7 +197,7 @@ interface WindowElement : MeasurableElement {
                             drawShadow,
                             matrix,
                             buffer,
-                            Font.DisplayMode.NORMAL,
+                            displayMode,
                             0,
                             packedLight,
                         )
@@ -225,6 +231,7 @@ interface WindowElement : MeasurableElement {
             y: Float,
             availableWidth: Float,
             packedLight: Int,
+            seeThrough: Boolean,
         ) {
             if (stack.isEmpty) return
 
@@ -252,6 +259,7 @@ interface WindowElement : MeasurableElement {
             y: Float,
             availableWidth: Float,
             packedLight: Int,
+            seeThrough: Boolean,
         ) {
             val builder = buffer.getBuffer(RenderType.entityCutoutNoCull(texture))
             val matrix = poseStack.last().pose()
@@ -299,6 +307,7 @@ interface WindowElement : MeasurableElement {
             y: Float,
             availableWidth: Float,
             packedLight: Int,
+            seeThrough: Boolean,
         ) = Unit
     }
 
@@ -325,25 +334,29 @@ interface WindowElement : MeasurableElement {
             y: Float,
             availableWidth: Float,
             packedLight: Int,
+            seeThrough: Boolean,
         ) {
             val drawWidth = availableWidth.coerceAtLeast(0f)
             if (drawWidth <= 0f) return
 
             val top = y + safeMargin
             val bottom = top + safeThickness
-            val builder = buffer.getBuffer(RenderType.debugQuads())
+            val renderType = if (seeThrough) RenderType.textBackgroundSeeThrough() else RenderType.textBackground()
+            val builder = buffer.getBuffer(renderType)
             val matrix = poseStack.last().pose()
             val time = WindowColor.currentTimeSeconds()
             val topLeft = color.resolve(0f, 0f, time)
             val bottomLeft = color.resolve(0f, 1f, time)
             val bottomRight = color.resolve(1f, 1f, time)
             val topRight = color.resolve(1f, 0f, time)
-            builder.addVertex(matrix, x, top, 0.05f).setColor(topLeft.r, topLeft.g, topLeft.b, topLeft.a)
-            builder.addVertex(matrix, x, bottom, 0.05f).setColor(bottomLeft.r, bottomLeft.g, bottomLeft.b, bottomLeft.a)
+            builder.addVertex(matrix, x, top, 0.05f).setColor(topLeft.r, topLeft.g, topLeft.b, topLeft.a).setLight(packedLight)
+            builder.addVertex(matrix, x, bottom, 0.05f).setColor(bottomLeft.r, bottomLeft.g, bottomLeft.b, bottomLeft.a).setLight(packedLight)
             builder.addVertex(matrix, x + drawWidth, bottom, 0.05f)
                 .setColor(bottomRight.r, bottomRight.g, bottomRight.b, bottomRight.a)
+                .setLight(packedLight)
             builder.addVertex(matrix, x + drawWidth, top, 0.05f)
                 .setColor(topRight.r, topRight.g, topRight.b, topRight.a)
+                .setLight(packedLight)
         }
     }
 
@@ -382,6 +395,7 @@ interface WindowElement : MeasurableElement {
             y: Float,
             availableWidth: Float,
             packedLight: Int,
+            seeThrough: Boolean,
         ) {
             val drawX = x + when (alignment) {
                 Text.TextAlignment.LEFT -> 0f
@@ -390,7 +404,8 @@ interface WindowElement : MeasurableElement {
             }
 
             val matrix = poseStack.last().pose()
-            val builder = buffer.getBuffer(RenderType.debugQuads())
+            val renderType = if (seeThrough) RenderType.textBackgroundSeeThrough() else RenderType.textBackground()
+            val builder = buffer.getBuffer(renderType)
             val time = WindowColor.currentTimeSeconds()
 
             // 1. Background
@@ -398,10 +413,10 @@ interface WindowElement : MeasurableElement {
             val bgBL = backgroundColor.resolve(0f, 1f, time)
             val bgBR = backgroundColor.resolve(1f, 1f, time)
             val bgTR = backgroundColor.resolve(1f, 0f, time)
-            builder.addVertex(matrix, drawX, y, 0.02f).setColor(bgTL.r, bgTL.g, bgTL.b, bgTL.a)
-            builder.addVertex(matrix, drawX, y + safeHeight, 0.02f).setColor(bgBL.r, bgBL.g, bgBL.b, bgBL.a)
-            builder.addVertex(matrix, drawX + safeWidth, y + safeHeight, 0.02f).setColor(bgBR.r, bgBR.g, bgBR.b, bgBR.a)
-            builder.addVertex(matrix, drawX + safeWidth, y, 0.02f).setColor(bgTR.r, bgTR.g, bgTR.b, bgTR.a)
+            builder.addVertex(matrix, drawX, y, 0.02f).setColor(bgTL.r, bgTL.g, bgTL.b, bgTL.a).setLight(packedLight)
+            builder.addVertex(matrix, drawX, y + safeHeight, 0.02f).setColor(bgBL.r, bgBL.g, bgBL.b, bgBL.a).setLight(packedLight)
+            builder.addVertex(matrix, drawX + safeWidth, y + safeHeight, 0.02f).setColor(bgBR.r, bgBR.g, bgBR.b, bgBR.a).setLight(packedLight)
+            builder.addVertex(matrix, drawX + safeWidth, y, 0.02f).setColor(bgTR.r, bgTR.g, bgTR.b, bgTR.a).setLight(packedLight)
 
             // 2. Filled progress bar
             val bw = if (borderColor != null) borderWidth.coerceAtLeast(0f) else 0f
@@ -417,10 +432,10 @@ interface WindowElement : MeasurableElement {
                 val fillBR = fillColor.resolve(clampedProgress, 1f, time)
                 val fillTR = fillColor.resolve(clampedProgress, 0f, time)
 
-                builder.addVertex(matrix, fillX, fillY, 0.04f).setColor(fillTL.r, fillTL.g, fillTL.b, fillTL.a)
-                builder.addVertex(matrix, fillX, fillY + innerH, 0.04f).setColor(fillBL.r, fillBL.g, fillBL.b, fillBL.a)
-                builder.addVertex(matrix, fillX + filledW, fillY + innerH, 0.04f).setColor(fillBR.r, fillBR.g, fillBR.b, fillBR.a)
-                builder.addVertex(matrix, fillX + filledW, fillY, 0.04f).setColor(fillTR.r, fillTR.g, fillTR.b, fillTR.a)
+                builder.addVertex(matrix, fillX, fillY, 0.04f).setColor(fillTL.r, fillTL.g, fillTL.b, fillTL.a).setLight(packedLight)
+                builder.addVertex(matrix, fillX, fillY + innerH, 0.04f).setColor(fillBL.r, fillBL.g, fillBL.b, fillBL.a).setLight(packedLight)
+                builder.addVertex(matrix, fillX + filledW, fillY + innerH, 0.04f).setColor(fillBR.r, fillBR.g, fillBR.b, fillBR.a).setLight(packedLight)
+                builder.addVertex(matrix, fillX + filledW, fillY, 0.04f).setColor(fillTR.r, fillTR.g, fillTR.b, fillTR.a).setLight(packedLight)
             }
 
             // 3. Optional Border
@@ -430,28 +445,28 @@ interface WindowElement : MeasurableElement {
                 val b = y + safeHeight
 
                 // Top border
-                builder.addVertex(matrix, drawX, y, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a)
-                builder.addVertex(matrix, drawX, y + bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a)
-                builder.addVertex(matrix, r, y + bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a)
-                builder.addVertex(matrix, r, y, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a)
+                builder.addVertex(matrix, drawX, y, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+                builder.addVertex(matrix, drawX, y + bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+                builder.addVertex(matrix, r, y + bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+                builder.addVertex(matrix, r, y, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
 
                 // Bottom border
-                builder.addVertex(matrix, drawX, b - bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a)
-                builder.addVertex(matrix, drawX, b, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a)
-                builder.addVertex(matrix, r, b, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a)
-                builder.addVertex(matrix, r, b - bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a)
+                builder.addVertex(matrix, drawX, b - bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+                builder.addVertex(matrix, drawX, b, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+                builder.addVertex(matrix, r, b, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+                builder.addVertex(matrix, r, b - bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
 
                 // Left border
-                builder.addVertex(matrix, drawX, y + bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a)
-                builder.addVertex(matrix, drawX, b - bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a)
-                builder.addVertex(matrix, drawX + bw, b - bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a)
-                builder.addVertex(matrix, drawX + bw, y + bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a)
+                builder.addVertex(matrix, drawX, y + bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+                builder.addVertex(matrix, drawX, b - bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+                builder.addVertex(matrix, drawX + bw, b - bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+                builder.addVertex(matrix, drawX + bw, y + bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
 
                 // Right border
-                builder.addVertex(matrix, r - bw, y + bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a)
-                builder.addVertex(matrix, r - bw, b - bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a)
-                builder.addVertex(matrix, r, b - bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a)
-                builder.addVertex(matrix, r, y + bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a)
+                builder.addVertex(matrix, r - bw, y + bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+                builder.addVertex(matrix, r - bw, b - bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+                builder.addVertex(matrix, r, b - bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+                builder.addVertex(matrix, r, y + bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
             }
         }
     }
@@ -490,6 +505,7 @@ interface WindowElement : MeasurableElement {
             y: Float,
             availableWidth: Float,
             packedLight: Int,
+            seeThrough: Boolean,
         ) {
             val totalW = getWidth()
             val drawX = x + when (alignment) {
@@ -502,7 +518,8 @@ interface WindowElement : MeasurableElement {
             val cy = y + safeRadius
             val rOuter = safeRadius
             val rInner = safeRadius - safeThickness
-            val builder = buffer.getBuffer(RenderType.debugQuads())
+            val renderType = if (seeThrough) RenderType.textBackgroundSeeThrough() else RenderType.textBackground()
+            val builder = buffer.getBuffer(renderType)
             val matrix = poseStack.last().pose()
             val time = WindowColor.currentTimeSeconds()
 
@@ -526,10 +543,10 @@ interface WindowElement : MeasurableElement {
                 val x1In = cx + rInner * cos(a1)
                 val y1In = cy + rInner * sin(a1)
 
-                builder.addVertex(matrix, x0Out, y0Out, 0.02f).setColor(c0.r, c0.g, c0.b, c0.a)
-                builder.addVertex(matrix, x0In, y0In, 0.02f).setColor(c0.r, c0.g, c0.b, c0.a)
-                builder.addVertex(matrix, x1In, y1In, 0.02f).setColor(c1.r, c1.g, c1.b, c1.a)
-                builder.addVertex(matrix, x1Out, y1Out, 0.02f).setColor(c1.r, c1.g, c1.b, c1.a)
+                builder.addVertex(matrix, x0Out, y0Out, 0.02f).setColor(c0.r, c0.g, c0.b, c0.a).setLight(packedLight)
+                builder.addVertex(matrix, x0In, y0In, 0.02f).setColor(c0.r, c0.g, c0.b, c0.a).setLight(packedLight)
+                builder.addVertex(matrix, x1In, y1In, 0.02f).setColor(c1.r, c1.g, c1.b, c1.a).setLight(packedLight)
+                builder.addVertex(matrix, x1Out, y1Out, 0.02f).setColor(c1.r, c1.g, c1.b, c1.a).setLight(packedLight)
             }
 
             // 2. Active Progress Arc
@@ -556,10 +573,10 @@ interface WindowElement : MeasurableElement {
                     val x1In = cx + rInner * cos(a1)
                     val y1In = cy + rInner * sin(a1)
 
-                    builder.addVertex(matrix, x0Out, y0Out, 0.04f).setColor(c0.r, c0.g, c0.b, c0.a)
-                    builder.addVertex(matrix, x0In, y0In, 0.04f).setColor(c0.r, c0.g, c0.b, c0.a)
-                    builder.addVertex(matrix, x1In, y1In, 0.04f).setColor(c1.r, c1.g, c1.b, c1.a)
-                    builder.addVertex(matrix, x1Out, y1Out, 0.04f).setColor(c1.r, c1.g, c1.b, c1.a)
+                    builder.addVertex(matrix, x0Out, y0Out, 0.04f).setColor(c0.r, c0.g, c0.b, c0.a).setLight(packedLight)
+                    builder.addVertex(matrix, x0In, y0In, 0.04f).setColor(c0.r, c0.g, c0.b, c0.a).setLight(packedLight)
+                    builder.addVertex(matrix, x1In, y1In, 0.04f).setColor(c1.r, c1.g, c1.b, c1.a).setLight(packedLight)
+                    builder.addVertex(matrix, x1Out, y1Out, 0.04f).setColor(c1.r, c1.g, c1.b, c1.a).setLight(packedLight)
                 }
             }
         }
@@ -600,6 +617,7 @@ interface WindowElement : MeasurableElement {
             y: Float,
             availableWidth: Float,
             packedLight: Int,
+            seeThrough: Boolean,
         ) {
             val startX = x + when (alignment) {
                 Text.TextAlignment.LEFT -> 0f
@@ -608,7 +626,8 @@ interface WindowElement : MeasurableElement {
             }
 
             val matrix = poseStack.last().pose()
-            val builder = buffer.getBuffer(RenderType.debugQuads())
+            val renderType = if (seeThrough) RenderType.textBackgroundSeeThrough() else RenderType.textBackground()
+            val builder = buffer.getBuffer(renderType)
             val time = WindowColor.currentTimeSeconds()
 
             for (index in items.indices) {
@@ -621,10 +640,10 @@ interface WindowElement : MeasurableElement {
                 // Optional slot background
                 if (slotBackground != null) {
                     val bg = slotBackground.resolve(0.5f, 0.5f, time)
-                    builder.addVertex(matrix, slotX, slotY, 0.02f).setColor(bg.r, bg.g, bg.b, bg.a)
-                    builder.addVertex(matrix, slotX, slotY + slotSize, 0.02f).setColor(bg.r, bg.g, bg.b, bg.a)
-                    builder.addVertex(matrix, slotX + slotSize, slotY + slotSize, 0.02f).setColor(bg.r, bg.g, bg.b, bg.a)
-                    builder.addVertex(matrix, slotX + slotSize, slotY, 0.02f).setColor(bg.r, bg.g, bg.b, bg.a)
+                    builder.addVertex(matrix, slotX, slotY, 0.02f).setColor(bg.r, bg.g, bg.b, bg.a).setLight(packedLight)
+                    builder.addVertex(matrix, slotX, slotY + slotSize, 0.02f).setColor(bg.r, bg.g, bg.b, bg.a).setLight(packedLight)
+                    builder.addVertex(matrix, slotX + slotSize, slotY + slotSize, 0.02f).setColor(bg.r, bg.g, bg.b, bg.a).setLight(packedLight)
+                    builder.addVertex(matrix, slotX + slotSize, slotY, 0.02f).setColor(bg.r, bg.g, bg.b, bg.a).setLight(packedLight)
                 }
 
                 // Optional slot border
@@ -634,25 +653,25 @@ interface WindowElement : MeasurableElement {
                     val r = slotX + slotSize
                     val bot = slotY + slotSize
 
-                    builder.addVertex(matrix, slotX, slotY, 0.03f).setColor(b.r, b.g, b.b, b.a)
-                    builder.addVertex(matrix, slotX, slotY + bw, 0.03f).setColor(b.r, b.g, b.b, b.a)
-                    builder.addVertex(matrix, r, slotY + bw, 0.03f).setColor(b.r, b.g, b.b, b.a)
-                    builder.addVertex(matrix, r, slotY, 0.03f).setColor(b.r, b.g, b.b, b.a)
+                    builder.addVertex(matrix, slotX, slotY, 0.03f).setColor(b.r, b.g, b.b, b.a).setLight(packedLight)
+                    builder.addVertex(matrix, slotX, slotY + bw, 0.03f).setColor(b.r, b.g, b.b, b.a).setLight(packedLight)
+                    builder.addVertex(matrix, r, slotY + bw, 0.03f).setColor(b.r, b.g, b.b, b.a).setLight(packedLight)
+                    builder.addVertex(matrix, r, slotY, 0.03f).setColor(b.r, b.g, b.b, b.a).setLight(packedLight)
 
-                    builder.addVertex(matrix, slotX, bot - bw, 0.03f).setColor(b.r, b.g, b.b, b.a)
-                    builder.addVertex(matrix, slotX, bot, 0.03f).setColor(b.r, b.g, b.b, b.a)
-                    builder.addVertex(matrix, r, bot, 0.03f).setColor(b.r, b.g, b.b, b.a)
-                    builder.addVertex(matrix, r, bot - bw, 0.03f).setColor(b.r, b.g, b.b, b.a)
+                    builder.addVertex(matrix, slotX, bot - bw, 0.03f).setColor(b.r, b.g, b.b, b.a).setLight(packedLight)
+                    builder.addVertex(matrix, slotX, bot, 0.03f).setColor(b.r, b.g, b.b, b.a).setLight(packedLight)
+                    builder.addVertex(matrix, r, bot, 0.03f).setColor(b.r, b.g, b.b, b.a).setLight(packedLight)
+                    builder.addVertex(matrix, r, bot - bw, 0.03f).setColor(b.r, b.g, b.b, b.a).setLight(packedLight)
 
-                    builder.addVertex(matrix, slotX, slotY + bw, 0.03f).setColor(b.r, b.g, b.b, b.a)
-                    builder.addVertex(matrix, slotX, bot - bw, 0.03f).setColor(b.r, b.g, b.b, b.a)
-                    builder.addVertex(matrix, slotX + bw, bot - bw, 0.03f).setColor(b.r, b.g, b.b, b.a)
-                    builder.addVertex(matrix, slotX + bw, slotY + bw, 0.03f).setColor(b.r, b.g, b.b, b.a)
+                    builder.addVertex(matrix, slotX, slotY + bw, 0.03f).setColor(b.r, b.g, b.b, b.a).setLight(packedLight)
+                    builder.addVertex(matrix, slotX, bot - bw, 0.03f).setColor(b.r, b.g, b.b, b.a).setLight(packedLight)
+                    builder.addVertex(matrix, slotX + bw, bot - bw, 0.03f).setColor(b.r, b.g, b.b, b.a).setLight(packedLight)
+                    builder.addVertex(matrix, slotX + bw, slotY + bw, 0.03f).setColor(b.r, b.g, b.b, b.a).setLight(packedLight)
 
-                    builder.addVertex(matrix, r - bw, slotY + bw, 0.03f).setColor(b.r, b.g, b.b, b.a)
-                    builder.addVertex(matrix, r - bw, bot - bw, 0.03f).setColor(b.r, b.g, b.b, b.a)
-                    builder.addVertex(matrix, r, bot - bw, 0.03f).setColor(b.r, b.g, b.b, b.a)
-                    builder.addVertex(matrix, r, slotY + bw, 0.03f).setColor(b.r, b.g, b.b, b.a)
+                    builder.addVertex(matrix, r - bw, slotY + bw, 0.03f).setColor(b.r, b.g, b.b, b.a).setLight(packedLight)
+                    builder.addVertex(matrix, r - bw, bot - bw, 0.03f).setColor(b.r, b.g, b.b, b.a).setLight(packedLight)
+                    builder.addVertex(matrix, r, bot - bw, 0.03f).setColor(b.r, b.g, b.b, b.a).setLight(packedLight)
+                    builder.addVertex(matrix, r, slotY + bw, 0.03f).setColor(b.r, b.g, b.b, b.a).setLight(packedLight)
                 }
 
                 if (!stack.isEmpty) {
@@ -688,6 +707,7 @@ interface WindowElement : MeasurableElement {
             y: Float,
             availableWidth: Float,
             packedLight: Int,
+            seeThrough: Boolean,
         ) {
             val rowWidth = getWidth()
             val rowHeight = getHeight()
@@ -699,7 +719,7 @@ interface WindowElement : MeasurableElement {
             var currentX = startX
             for (element in elements) {
                 val elementHeight = element.getHeight()
-                element.render(poseStack, buffer, currentX, y + (rowHeight - elementHeight) / 2f, element.getWidth(), packedLight)
+                element.render(poseStack, buffer, currentX, y + (rowHeight - elementHeight) / 2f, element.getWidth(), packedLight, seeThrough)
                 currentX += element.getWidth() + safeSpacing
             }
         }

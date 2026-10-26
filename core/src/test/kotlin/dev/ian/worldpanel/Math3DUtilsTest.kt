@@ -57,6 +57,34 @@ class Math3DUtilsTest {
         for (face in CubeFace.values()) {
             val netYaw = (face.yawDegrees + face.targetYawDegrees) % 360f
             assertEquals(0f, abs(netYaw), 1e-4f)
+
+            // Normal length is exactly 1.0
+            val lenSq = face.normalX * face.normalX + face.normalY * face.normalY + face.normalZ * face.normalZ
+            assertEquals(1f, lenSq, 1e-5f)
         }
+
+        assertEquals(0f, CubeFace.FRONT.normalX)
+        assertEquals(0f, CubeFace.FRONT.normalY)
+        assertEquals(1f, CubeFace.FRONT.normalZ)
+
+        assertEquals(0f, CubeFace.BACK.normalX)
+        assertEquals(0f, CubeFace.BACK.normalY)
+        assertEquals(-1f, CubeFace.BACK.normalZ)
+
+        assertEquals(-1f, CubeFace.LEFT.normalX)
+        assertEquals(0f, CubeFace.LEFT.normalY)
+        assertEquals(0f, CubeFace.LEFT.normalZ)
+
+        assertEquals(1f, CubeFace.RIGHT.normalX)
+        assertEquals(0f, CubeFace.RIGHT.normalY)
+        assertEquals(0f, CubeFace.RIGHT.normalZ)
+
+        assertEquals(0f, CubeFace.TOP.normalX)
+        assertEquals(1f, CubeFace.TOP.normalY)
+        assertEquals(0f, CubeFace.TOP.normalZ)
+
+        assertEquals(0f, CubeFace.BOTTOM.normalX)
+        assertEquals(-1f, CubeFace.BOTTOM.normalY)
+        assertEquals(0f, CubeFace.BOTTOM.normalZ)
     }
 }

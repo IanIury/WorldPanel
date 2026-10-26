@@ -2,11 +2,16 @@ package dev.ian.worldpanel
 
 import com.mojang.blaze3d.vertex.PoseStack
 import com.mojang.math.Axis
+import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.MultiBufferSource
+import org.joml.Matrix4f
+import org.joml.Vector3f
+import kotlin.math.sqrt
 
 /**
  * A composite 3D object where each of the 6 faces is an independent, fully configurable [FloatingWindow].
- * Supports procedural continuous tumbling/spinning or smooth targeting toward a selected [CubeFace].
+ * Supports procedural continuous tumbling/spinning or smooth targeting toward a selected [CubeFace],
+ * with intelligent backface culling for high-performance rendering.
  */
 class FloatingCube private constructor(
     val size: Float,
@@ -19,7 +24,7 @@ class FloatingCube private constructor(
     val tumbleSpeedY: Float,
     val tumbleSpeedZ: Float,
     initialTargetFace: CubeFace?,
-    val transitionSpeed: Float,
+    var transitionSpeed: Float,
 ) {
     private var targetFace: CubeFace? = initialTargetFace
     private var currentYaw: Float = initialTargetFace?.targetYawDegrees ?: 0f
@@ -31,7 +36,10 @@ class FloatingCube private constructor(
 
     fun targetFace(face: CubeFace, transitionSpeed: Float = 5.0f) {
         this.targetFace = face
+        this.transitionSpeed = transitionSpeed
     }
+
+    fun setTargetFace(face: CubeFace, transitionSpeed: Float = 5.0f) = targetFace(face, transitionSpeed)
 
     fun clearTargetFace() {
         this.targetFace = null
@@ -40,7 +48,7 @@ class FloatingCube private constructor(
     fun getTargetFace(): CubeFace? = targetFace
 
     /**
-     * Renders all outward faces of the cube with backface culling compatibility and zero Z-fighting.
+     * Renders all outward faces of the cube with intelligent backface culling and zero Z-fighting.
      */
     fun render(poseStack: PoseStack, buffer: MultiBufferSource, packedLight: Int) {
         if (faces.isEmpty()) return
@@ -66,6 +74,15 @@ class FloatingCube private constructor(
         }
         lastTimeSeconds = timeSeconds
 
+        val camera = Minecraft.getInstance().gameRenderer.mainCamera
+        val cameraPos = camera.position
+        val halfBlocks = (size * scale) / 2.0
+
+        val rotMatrix = Matrix4f()
+            .rotateY(Math.toRadians(rotYaw.toDouble()).toFloat())
+            .rotateX(Math.toRadians(rotPitch.toDouble()).toFloat())
+            .rotateZ(Math.toRadians(rotRoll.toDouble()).toFloat())
+
         poseStack.pushPose()
         poseStack.translate(offsetX, offsetY, offsetZ)
 
@@ -73,9 +90,29 @@ class FloatingCube private constructor(
         if (rotPitch != 0f) poseStack.mulPose(Axis.XP.rotationDegrees(rotPitch))
         if (rotRoll != 0f) poseStack.mulPose(Axis.ZP.rotationDegrees(rotRoll))
 
-        val halfBlocks = (size * scale) / 2.0
-
         for ((face, window) in faces) {
+            // Intelligent dot-product backface culling:
+            // Calculate transformed outward normal in world coordinates
+            val normal = Vector3f(face.normalX, face.normalY, face.normalZ)
+            rotMatrix.transformDirection(normal)
+
+            val faceCenterX = offsetX + normal.x * halfBlocks
+            val faceCenterY = offsetY + normal.y * halfBlocks
+            val faceCenterZ = offsetZ + normal.z * halfBlocks
+
+            val toCamX = cameraPos.x - faceCenterX
+            val toCamY = cameraPos.y - faceCenterY
+            val toCamZ = cameraPos.z - faceCenterZ
+            val dist = sqrt(toCamX * toCamX + toCamY * toCamY + toCamZ * toCamZ)
+
+            if (dist > 0.0001 && !window.seeThrough && !window.renderBackFace) {
+                val dot = (normal.x * toCamX + normal.y * toCamY + normal.z * toCamZ) / dist
+                if (dot <= 0.0) {
+                    // Face is facing away from the camera, skip rendering for massive FPS savings
+                    continue
+                }
+            }
+
             poseStack.pushPose()
             when (face) {
                 CubeFace.FRONT -> {
@@ -150,6 +187,9 @@ class FloatingCube private constructor(
             this.targetFace = face
             this.transitionSpeed = transitionSpeed
         }
+
+        /** Alias for [targetFace]. */
+        fun setTargetFace(face: CubeFace, transitionSpeed: Float = 5.0f) = targetFace(face, transitionSpeed)
 
         fun clearTargetFace() = apply {
             this.targetFace = null

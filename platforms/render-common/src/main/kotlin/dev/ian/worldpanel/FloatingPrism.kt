@@ -3,7 +3,13 @@ package dev.ian.worldpanel
 import com.mojang.blaze3d.vertex.PoseStack
 import com.mojang.math.Axis
 import dev.ian.worldpanel.shape.PanelShape
+import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.MultiBufferSource
+import org.joml.Matrix4f
+import org.joml.Vector3f
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
  * A composite 3D regular prism (such as a hexagonal, octagonal, or triangular prism)
@@ -24,7 +30,7 @@ class FloatingPrism private constructor(
     val tumbleSpeedX: Float,
     val tumbleSpeedZ: Float,
     initialTargetSide: Int?,
-    val transitionSpeed: Float,
+    var transitionSpeed: Float,
 ) {
     private var targetSide: Int? = initialTargetSide
     private var currentYaw: Float = if (initialTargetSide != null) -initialTargetSide * (360f / sides) else 0f
@@ -38,7 +44,10 @@ class FloatingPrism private constructor(
 
     fun targetSide(index: Int, transitionSpeed: Float = 5.0f) {
         this.targetSide = (index % sides + sides) % sides
+        this.transitionSpeed = transitionSpeed
     }
+
+    fun setTargetSide(index: Int, transitionSpeed: Float = 5.0f) = targetSide(index, transitionSpeed)
 
     fun clearTargetSide() {
         this.targetSide = null
@@ -71,6 +80,14 @@ class FloatingPrism private constructor(
         }
         lastTimeSeconds = timeSeconds
 
+        val camera = Minecraft.getInstance().gameRenderer.mainCamera
+        val cameraPos = camera.position
+
+        val rotMatrix = Matrix4f()
+            .rotateY(Math.toRadians(rotYaw.toDouble()).toFloat())
+            .rotateX(Math.toRadians(rotPitch.toDouble()).toFloat())
+            .rotateZ(Math.toRadians(rotRoll.toDouble()).toFloat())
+
         poseStack.pushPose()
         poseStack.translate(offsetX, offsetY, offsetZ)
 
@@ -84,6 +101,29 @@ class FloatingPrism private constructor(
 
         for ((index, window) in sideFaces) {
             val angle = index * (360f / sides)
+            val angleRad = Math.toRadians(angle.toDouble())
+            val localNormX = sin(angleRad).toFloat()
+            val localNormZ = cos(angleRad).toFloat()
+
+            val normal = Vector3f(localNormX, 0f, localNormZ)
+            rotMatrix.transformDirection(normal)
+
+            val faceCenterX = offsetX + normal.x * apothem
+            val faceCenterY = offsetY + normal.y * apothem
+            val faceCenterZ = offsetZ + normal.z * apothem
+
+            val toCamX = cameraPos.x - faceCenterX
+            val toCamY = cameraPos.y - faceCenterY
+            val toCamZ = cameraPos.z - faceCenterZ
+            val dist = sqrt(toCamX * toCamX + toCamY * toCamY + toCamZ * toCamZ)
+
+            if (dist > 0.0001 && !window.seeThrough && !window.renderBackFace) {
+                val dot = (normal.x * toCamX + normal.y * toCamY + normal.z * toCamZ) / dist
+                if (dot <= 0.0) {
+                    continue
+                }
+            }
+
             poseStack.pushPose()
             poseStack.mulPose(Axis.YP.rotationDegrees(angle))
             poseStack.translate(0.0, 0.0, apothem)
@@ -92,19 +132,49 @@ class FloatingPrism private constructor(
         }
 
         if (topFace != null) {
-            poseStack.pushPose()
-            poseStack.mulPose(Axis.XP.rotationDegrees(-90f))
-            poseStack.translate(0.0, 0.0, halfHeightBlocks)
-            topFace.render(poseStack, buffer, packedLight)
-            poseStack.popPose()
+            val normal = Vector3f(0f, 1f, 0f)
+            rotMatrix.transformDirection(normal)
+            val faceCenterX = offsetX + normal.x * halfHeightBlocks
+            val faceCenterY = offsetY + normal.y * halfHeightBlocks
+            val faceCenterZ = offsetZ + normal.z * halfHeightBlocks
+            val toCamX = cameraPos.x - faceCenterX
+            val toCamY = cameraPos.y - faceCenterY
+            val toCamZ = cameraPos.z - faceCenterZ
+            val dist = sqrt(toCamX * toCamX + toCamY * toCamY + toCamZ * toCamZ)
+
+            val cullTop = dist > 0.0001 && !topFace.seeThrough && !topFace.renderBackFace &&
+                ((normal.x * toCamX + normal.y * toCamY + normal.z * toCamZ) / dist <= 0.0)
+
+            if (!cullTop) {
+                poseStack.pushPose()
+                poseStack.mulPose(Axis.XP.rotationDegrees(-90f))
+                poseStack.translate(0.0, 0.0, halfHeightBlocks)
+                topFace.render(poseStack, buffer, packedLight)
+                poseStack.popPose()
+            }
         }
 
         if (bottomFace != null) {
-            poseStack.pushPose()
-            poseStack.mulPose(Axis.XP.rotationDegrees(90f))
-            poseStack.translate(0.0, 0.0, halfHeightBlocks)
-            bottomFace.render(poseStack, buffer, packedLight)
-            poseStack.popPose()
+            val normal = Vector3f(0f, -1f, 0f)
+            rotMatrix.transformDirection(normal)
+            val faceCenterX = offsetX + normal.x * halfHeightBlocks
+            val faceCenterY = offsetY + normal.y * halfHeightBlocks
+            val faceCenterZ = offsetZ + normal.z * halfHeightBlocks
+            val toCamX = cameraPos.x - faceCenterX
+            val toCamY = cameraPos.y - faceCenterY
+            val toCamZ = cameraPos.z - faceCenterZ
+            val dist = sqrt(toCamX * toCamX + toCamY * toCamY + toCamZ * toCamZ)
+
+            val cullBottom = dist > 0.0001 && !bottomFace.seeThrough && !bottomFace.renderBackFace &&
+                ((normal.x * toCamX + normal.y * toCamY + normal.z * toCamZ) / dist <= 0.0)
+
+            if (!cullBottom) {
+                poseStack.pushPose()
+                poseStack.mulPose(Axis.XP.rotationDegrees(90f))
+                poseStack.translate(0.0, 0.0, halfHeightBlocks)
+                bottomFace.render(poseStack, buffer, packedLight)
+                poseStack.popPose()
+            }
         }
 
         poseStack.popPose()
@@ -161,6 +231,8 @@ class FloatingPrism private constructor(
             this.targetSide = index
             this.transitionSpeed = transitionSpeed
         }
+
+        fun setTargetSide(index: Int, transitionSpeed: Float = 5.0f) = targetSide(index, transitionSpeed)
 
         fun clearTargetSide() = apply { this.targetSide = null }
 

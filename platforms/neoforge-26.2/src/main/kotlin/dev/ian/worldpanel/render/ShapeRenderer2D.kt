@@ -56,6 +56,7 @@ object ShapeRenderer2D {
         packedLight: Int,
         renderMode: PanelRenderMode = PanelRenderMode.FLAT_2D,
         volumeConfig: Volume3DConfig = Volume3DConfig.DEFAULT,
+        seeThrough: Boolean = false,
     ) {
         val width = bounds.width
         val height = bounds.height
@@ -80,10 +81,9 @@ object ShapeRenderer2D {
             return
         }
 
-        // Batch all geometric quads into a single submitCustomGeometry call on RenderTypes.textBackground()
-        // textBackground() enables DepthStencilState.DEFAULT (depth testing & depth writing), fog, lightmap,
-        // and translucent sorting on upload.
-        collector.submitCustomGeometry(poseStack, RenderTypes.textBackground()) { pose, builder ->
+        // Batch all geometric quads into a single submitCustomGeometry call on RenderTypes.textBackground() or textBackgroundSeeThrough()
+        val bgRenderType = if (seeThrough) RenderTypes.textBackgroundSeeThrough() else RenderTypes.textBackground()
+        collector.submitCustomGeometry(poseStack, bgRenderType) { pose, builder ->
             val matrix = pose.pose()
 
             // 1. Render physical 3D volume if enabled

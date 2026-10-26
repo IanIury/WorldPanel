@@ -344,6 +344,7 @@ class FloatingWindow private constructor(
                 depthStyle = DepthStyle.FLAT,
                 packedLight = effectiveLight,
                 renderMode = PanelRenderMode.FLAT_2D,
+                seeThrough = seeThrough,
             )
             poseStack.popPose()
         }
@@ -362,6 +363,7 @@ class FloatingWindow private constructor(
             packedLight = effectiveLight,
             renderMode = panelRenderMode,
             volumeConfig = volume3DConfig,
+            seeThrough = seeThrough,
         )
 
         // Determine logical content area
@@ -406,7 +408,8 @@ class FloatingWindow private constructor(
                     0f,
                     0f,
                     availW,
-                    effectiveLight
+                    effectiveLight,
+                    seeThrough
                 )
                 poseStack.popPose()
             }
@@ -468,7 +471,8 @@ class FloatingWindow private constructor(
                     drawX,
                     0f,
                     drawW,
-                    packedLight
+                    packedLight,
+                    seeThrough
                 )
                 poseStack.popPose()
             }
@@ -529,7 +533,8 @@ class FloatingWindow private constructor(
                     x = drawX,
                     y = currentY,
                     availableWidth = drawW,
-                    packedLight = effectiveLight
+                    packedLight = effectiveLight,
+                    seeThrough = seeThrough
                 )
                 currentY += elemH
             }
@@ -594,7 +599,8 @@ class FloatingWindow private constructor(
                     x = drawX,
                     y = currentY,
                     availableWidth = drawW,
-                    packedLight = effectiveLight
+                    packedLight = effectiveLight,
+                    seeThrough = seeThrough
                 )
                 currentY += elemH
             }
