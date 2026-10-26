@@ -696,11 +696,17 @@ object ShapeRenderer2D {
                     wallAlpha
                 )
 
-                // Quad connecting front face (z = 0) to back face (z = -thickness) - both windings for guaranteed visibility
+                // Outward-facing quad (visible from outside the 3D volume)
                 addVertex(builder, matrix, x0, y0, 0f, shadedColor)
+                addVertex(builder, matrix, x1, y1, 0f, shadedColor)
+                addVertex(builder, matrix, x1, y1, -thickness, shadedColor)
+                addVertex(builder, matrix, x0, y0, -thickness, shadedColor)
+
+                // Inward-facing quad (visible from inside)
                 addVertex(builder, matrix, x0, y0, -thickness, shadedColor)
                 addVertex(builder, matrix, x1, y1, -thickness, shadedColor)
                 addVertex(builder, matrix, x1, y1, 0f, shadedColor)
+                addVertex(builder, matrix, x0, y0, 0f, shadedColor)
 
 
             }

@@ -701,10 +701,17 @@ object ShapeRenderer2D {
                     wallAlpha
                 )
 
+                // Outward-facing quad (visible from outside the 3D volume)
                 addVertex(builder, matrix, x0, y0, 0f, shadedColor, packedLight)
+                addVertex(builder, matrix, x1, y1, 0f, shadedColor, packedLight)
+                addVertex(builder, matrix, x1, y1, -thickness, shadedColor, packedLight)
+                addVertex(builder, matrix, x0, y0, -thickness, shadedColor, packedLight)
+
+                // Inward-facing quad (visible from inside)
                 addVertex(builder, matrix, x0, y0, -thickness, shadedColor, packedLight)
                 addVertex(builder, matrix, x1, y1, -thickness, shadedColor, packedLight)
                 addVertex(builder, matrix, x1, y1, 0f, shadedColor, packedLight)
+                addVertex(builder, matrix, x0, y0, 0f, shadedColor, packedLight)
             }
         }
     }
