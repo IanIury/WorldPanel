@@ -2,10 +2,11 @@
 
 **WorldPanel** é uma biblioteca em Kotlin para criar e renderizar painéis visuais, janelas flutuantes e textos 3D diretamente no mundo do Minecraft (NeoForge).
 
-Ideal para exibir **etiquetas flutuantes sobre entidades**, **status de bonecos de treino (training dummies)**, **placas informativas de blocos/máquinas**, **barras de vida de chefes**, **letreiros 3D** e **interfaces imersivas no mundo**.
+Ideal para exibir **etiquetas flutuantes sobre entidades**, **status de bonecos de treino (training dummies)**, **placas informativas de blocos/máquinas**, **barras de vida de chefes**, **letreiros 3D**, **cubos holográficos rotativos**, **prismas com múltiplas telas** e **interfaces imersivas no mundo**.
 
 ### Por que usar o WorldPanel?
 - **Desacoplado e sob seu controle**: Não registra eventos globais ocultos nem interfere na renderização padrão do jogo. Você decide exatamente **quando**, **onde** e **para quem** renderizar chamando `.render(poseStack, buffer, packedLight)`.
+- **Formas 3D Multifacetadas**: Crie poliedros 3D reais (`FloatingCube`, `FloatingPrism` e `FloatingCarousel`) onde **cada face é um painel independente** totalmente configurável, com rotação contínua (tumbling) ou travamento suave em faces específicas.
 - **Elementos Prontos para HUDs**: Suporte nativo a barras de progresso/vida (`ProgressBar`), mostradores radiais (`RadialProgress`), grades de inventário (`ItemGrid`), presets instantâneos (`FloatingWindowPresets`) e utilitários anti-culling (`WorldPanelCulling`).
 - **Recursos Avançados de Câmera e Iluminação**: Modo holograma animado (`setHologram`), brilho total neon (`setFullBright`), visibilidade através de paredes (`setSeeThrough`), fade por distância (`setDistanceFade`) e tamanho constante na tela (`setConstantScreenSize`).
 - **Geometria e Layout Inteligentes**: Suporta desde retângulos arredondados até círculos, triângulos, hexágonos e losangos. O motor de layout ajusta automaticamente a posição e escala de cada linha de texto, ícone de item e separador para caber perfeitamente dentro do contorno real da forma escolhida.
@@ -248,6 +249,83 @@ val painel3D = FloatingWindow.builder()
     .addSeparator()
     .addText("Laterais com relevo físico")
     .build()
+```
+
+---
+
+## 🎲 Formas 3D Multifacetadas (`FloatingCube`, `FloatingPrism` e `FloatingCarousel`)
+
+O WorldPanel oferece poliedros 3D reais onde **cada face é uma `FloatingWindow` independente e totalmente configurável**:
+- **Zero Z-Fighting:** As faces se encontram exatamente nos vértices das bordas sem sobreposição.
+- **Backface Culling Compatível:** Normais apontando para fora, renderizando apenas as faces visíveis para a câmera.
+- **Rotação Procedural & Alvo Dinâmico:** Giro contínuo (`animateTumble`, `animateSpin`) ou interpolação suave até uma face/lado específico virado para o jogador (`targetFace`, `targetSide`, `targetPanel`).
+
+### 1. Cubo Holográfico 3D (`FloatingCube`)
+```kotlin
+val holographicCube = FloatingCube.builder()
+    .setSize(size = 48f)
+    .setScale(0.025f)
+    .setOffset(0.5, 2.0, 0.5)
+    // Animação: Giro contínuo suave nos 3 eixos (ou trave com .targetFace(CubeFace.FRONT))
+    .animateTumble(speedX = 0.4f, speedY = 0.8f, speedZ = 0.2f)
+    .configureFace(CubeFace.FRONT) { face ->
+        face.setBackground(WindowColor.Solid(0xEE0F172A))
+            .setBorder(WindowColor.Solid(0xFF38BDF8), width = 1f)
+            .addText("STATUS PRINCIPAL", color = WindowColor.Solid(0xFF38BDF8))
+            .addProgressBar(progress = 0.85f, width = 40f)
+    }
+    .configureFace(CubeFace.BACK) { face ->
+        face.setBackground(WindowColor.Solid(0xEE1E1B4B))
+            .addItemText(ItemStack(Items.NETHER_STAR), "Núcleo Estelar")
+    }
+    .configureFace(CubeFace.TOP) { face ->
+        face.setBackground(WindowColor.Solid(0xEE064E3B))
+            .addText("TELEMETRIA ORBITAL", color = WindowColor.Solid(0xFF34D399))
+    }
+    .build()
+
+// No seu evento de renderização (BlockEntity, Entity ou RenderLevelStageEvent):
+holographicCube.render(poseStack, bufferSource, packedLight)
+```
+
+### 2. Prisma Regular Hexagonal / N-Lados (`FloatingPrism`)
+Perfeito para totens arcanos, colunas de energia e reatores modulares:
+```kotlin
+val prism = FloatingPrism.builder()
+    .setSides(6) // Prisma hexagonal
+    .setSize(width = 36f, height = 48f)
+    .setScale(0.025f)
+    .animateSpin(speedY = 0.5f)
+    .configureSide(0) { side ->
+        side.setBackground(WindowColor.Solid(0xDD111827))
+            .addText("GERADOR A", WindowColor.Solid(0xFFF59E0B))
+            .addProgressBar(progress = 0.9f, width = 30f)
+    }
+    .configureTop { top ->
+        top.setBackground(WindowColor.Solid(0xFF1F2937))
+            .addText("▲", WindowColor.Solid(0xFFF59E0B))
+    }
+    .build()
+```
+
+### 3. Carrossel / Roleta Circular 360° (`FloatingCarousel`)
+Ideal para roletas de itens, seletores radiais de habilidades e vitrines giratórias:
+```kotlin
+val carousel = FloatingCarousel.builder()
+    .setPanelCount(8)
+    .setPanelSize(width = 32f, height = 32f)
+    .setScale(0.025f)
+    .targetPanel(0) // Trava suavemente no item selecionado
+    .configurePanel(0) { p ->
+        p.addItem(ItemStack(Items.DIAMOND_SWORD), size = 20f)
+    }
+    .configurePanel(1) { p ->
+        p.addItem(ItemStack(Items.NETHERITE_CHESTPLATE), size = 20f)
+    }
+    .build()
+
+// Alterne o painel selecionado com rotação suave:
+carousel.nextPanel()
 ```
 
 ---

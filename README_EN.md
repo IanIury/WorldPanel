@@ -2,10 +2,11 @@
 
 **WorldPanel** is a Kotlin library for creating and rendering visual panels, floating windows, and 3D text directly in the Minecraft 3D world (NeoForge).
 
-Ideal for displaying **floating entity nametags**, **training dummy status panels**, **machine/block info boards**, **boss health bars**, **3D signs**, and **immersive in-world UIs**.
+Ideal for displaying **floating entity nametags**, **training dummy status panels**, **machine/block info boards**, **boss health bars**, **3D signs**, **rotating holographic cubes**, **multi-faceted prisms**, and **immersive in-world UIs**.
 
 ### Why use WorldPanel?
 - **Decoupled and under your control**: Does not register hidden global events or interfere with vanilla rendering. You decide **when**, **where**, and **for whom** to render by calling `.render(poseStack, buffer, packedLight)`.
+- **Multi-Faced 3D Meshes**: Create real 3D polyhedra (`FloatingCube`, `FloatingPrism`, and `FloatingCarousel`) where **each face is an independent panel** fully configurable with continuous tumbling or smooth lock-on targeting toward the player.
 - **Ready-to-Use HUD Elements**: Native support for health/energy progress bars (`ProgressBar`), radial gauges (`RadialProgress`), inventory item grids (`ItemGrid`), instant templates (`FloatingWindowPresets`), and frustum culling utilities (`WorldPanelCulling`).
 - **Advanced Camera & Lighting Controls**: Animated holographic scanlines (`setHologram`), full bright neon mode (`setFullBright`), see-through wall rendering (`setSeeThrough`), distance-based fade/culling (`setDistanceFade`), and constant screen scaling (`setConstantScreenSize`).
 - **Smart Geometry & Shape-Aware Layout**: Supports everything from rounded rectangles to circles, triangles, hexagons, and rhombuses. The layout engine automatically adjusts the position and scale of each text line, item icon, and separator to fit cleanly inside the actual contour of the chosen shape.
@@ -204,7 +205,7 @@ WorldPanel provides a variety of 2D geometric shapes with high-precision continu
 | **Triangle** | `PanelShape.triangle()`, `equilateralTriangle()`, `rightTriangle()` | Isosceles, equilateral, or right triangle with orientation (`UP`, `DOWN`, `LEFT`, `RIGHT`). |
 | **Rhombus (Diamond)** | `PanelShape.rhombus()` | Diamond connecting the midpoints of all four edges. |
 | **Trapezoid** | `PanelShape.trapezoid(topWidthRatio)` | Trapezoid with adjustable top width ratio. |
-| **Parallelogram** | `PanelShape.parallelogram(skewRatio)` | Parallelogram with adjustable horizontal skew. |
+| **Paralelogramo** | `PanelShape.parallelogram(skewRatio)` | Parallelogram with adjustable horizontal skew. |
 | **Regular Polygon** | `PanelShape.polygon(sides, rotation)` | Pentagon (`sides = 5`), Hexagon (`sides = 6`), Octagon (`sides = 8`), etc. |
 | **PNG Silhouette** | `PanelShape.texture("modid:textures/gui/panel.png")` | Freeform shape based on a PNG texture's alpha silhouette. |
 
@@ -248,6 +249,83 @@ val volumetricPanel = FloatingWindow.builder()
     .addSeparator()
     .addText("Side walls with physical depth")
     .build()
+```
+
+---
+
+## 🎲 Multi-Faced 3D Meshes (`FloatingCube`, `FloatingPrism` & `FloatingCarousel`)
+
+WorldPanel provides native support for real 3D polyhedra where **each face is an independent, fully configurable `FloatingWindow`**:
+- **Zero Z-Fighting:** Faces meet seamlessly at exact border vertices without overlapping.
+- **Backface Culling Compatible:** All outward normals guarantee Minecraft only rasterizes faces visible to the camera.
+- **Procedural Tumbling & Smooth Targeting:** Continuous rotation (`animateTumble`, `animateSpin`) or smooth interpolation toward a specific player-facing face (`targetFace`, `targetSide`, `targetPanel`).
+
+### 1. 3D Holographic Cube (`FloatingCube`)
+```kotlin
+val holographicCube = FloatingCube.builder()
+    .setSize(size = 48f)
+    .setScale(0.025f)
+    .setOffset(0.5, 2.0, 0.5)
+    // Smooth 3-axis continuous rotation (or lock with .targetFace(CubeFace.FRONT))
+    .animateTumble(speedX = 0.4f, speedY = 0.8f, speedZ = 0.2f)
+    .configureFace(CubeFace.FRONT) { face ->
+        face.setBackground(WindowColor.Solid(0xEE0F172A))
+            .setBorder(WindowColor.Solid(0xFF38BDF8), width = 1f)
+            .addText("MAIN STATUS", color = WindowColor.Solid(0xFF38BDF8))
+            .addProgressBar(progress = 0.85f, width = 40f)
+    }
+    .configureFace(CubeFace.BACK) { face ->
+        face.setBackground(WindowColor.Solid(0xEE1E1B4B))
+            .addItemText(ItemStack(Items.NETHER_STAR), "Star Core")
+    }
+    .configureFace(CubeFace.TOP) { face ->
+        face.setBackground(WindowColor.Solid(0xEE064E3B))
+            .addText("ORBITAL TELEMETRY", color = WindowColor.Solid(0xFF34D399))
+    }
+    .build()
+
+// Inside your render event (BlockEntity, Entity or RenderLevelStageEvent):
+holographicCube.render(poseStack, bufferSource, packedLight)
+```
+
+### 2. Regular Hexagonal / N-Sided Prism (`FloatingPrism`)
+Perfect for arcane totems, energy pylons, and modular reactors:
+```kotlin
+val prism = FloatingPrism.builder()
+    .setSides(6) // Hexagonal prism
+    .setSize(width = 36f, height = 48f)
+    .setScale(0.025f)
+    .animateSpin(speedY = 0.5f)
+    .configureSide(0) { side ->
+        side.setBackground(WindowColor.Solid(0xDD111827))
+            .addText("GENERATOR A", WindowColor.Solid(0xFFF59E0B))
+            .addProgressBar(progress = 0.9f, width = 30f)
+    }
+    .configureTop { top ->
+        top.setBackground(WindowColor.Solid(0xFF1F2937))
+            .addText("▲", WindowColor.Solid(0xFFF59E0B))
+    }
+    .build()
+```
+
+### 3. Circular 360° Carousel & Wheel (`FloatingCarousel`)
+Ideal for roulette wheels, radial skill selectors, and rotating item showcases:
+```kotlin
+val carousel = FloatingCarousel.builder()
+    .setPanelCount(8)
+    .setPanelSize(width = 32f, height = 32f)
+    .setScale(0.025f)
+    .targetPanel(0) // Smoothly rotates to bring selected panel front-facing
+    .configurePanel(0) { p ->
+        p.addItem(ItemStack(Items.DIAMOND_SWORD), size = 20f)
+    }
+    .configurePanel(1) { p ->
+        p.addItem(ItemStack(Items.NETHERITE_CHESTPLATE), size = 20f)
+    }
+    .build()
+
+// Cycle through panels with smooth transitions:
+carousel.nextPanel()
 ```
 
 ---
