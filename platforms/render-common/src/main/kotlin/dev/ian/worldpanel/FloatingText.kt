@@ -41,6 +41,12 @@ class FloatingText private constructor(
         private var lineSpacing: Float = 2f
         private var offsetRelativeToOrientation: Boolean = true
         private var renderBackFace: Boolean = false
+        private var fullBright: Boolean = false
+        private var seeThrough: Boolean = false
+        private var distanceFadeMin: Double? = null
+        private var distanceFadeMax: Double? = null
+        private var constantScreenSize: Boolean = false
+        private var referenceDistance: Double = 8.0
         private val animations = mutableListOf<PanelAnimation>()
 
         private data class LineConfig(
@@ -201,6 +207,24 @@ class FloatingText private constructor(
 
         fun setDoubleSided(doubleSided: Boolean = true) = setRenderBackFace(doubleSided)
 
+        /** Ignores ambient block and sky light, rendering the text at 100% full brightness. */
+        fun setFullBright(enabled: Boolean = true) = apply { this.fullBright = enabled }
+
+        /** Renders the text visible even through solid walls. */
+        fun setSeeThrough(enabled: Boolean = true) = apply { this.seeThrough = enabled }
+
+        /** Configures smooth distance fade-out and automatic culling beyond [maxDistance] blocks. */
+        fun setDistanceFade(minDistance: Double, maxDistance: Double) = apply {
+            this.distanceFadeMin = minDistance.coerceAtLeast(0.0)
+            this.distanceFadeMax = maxDistance.coerceAtLeast(minDistance)
+        }
+
+        /** Keeps visual screen size constant regardless of distance from camera. */
+        fun setConstantScreenSize(enabled: Boolean = true, referenceDistance: Double = 8.0) = apply {
+            this.constantScreenSize = enabled
+            this.referenceDistance = referenceDistance.coerceAtLeast(0.1)
+        }
+
         /** Adds a custom procedural animation to this text. */
         fun addAnimation(animation: PanelAnimation) = apply {
             animations += animation
@@ -251,6 +275,11 @@ class FloatingText private constructor(
             for (anim in animations) {
                 winBuilder.addAnimation(anim)
             }
+
+            if (fullBright) winBuilder.setFullBright(true)
+            if (seeThrough) winBuilder.setSeeThrough(true)
+            if (distanceFadeMin != null && distanceFadeMax != null) winBuilder.setDistanceFade(distanceFadeMin!!, distanceFadeMax!!)
+            if (constantScreenSize) winBuilder.setConstantScreenSize(true, referenceDistance)
 
             for ((index, line) in lines.withIndex()) {
                 val use3D = line.is3D ?: this.is3D

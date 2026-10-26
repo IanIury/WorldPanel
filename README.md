@@ -6,6 +6,8 @@ Ideal para exibir **etiquetas flutuantes sobre entidades**, **status de bonecos 
 
 ### Por que usar o WorldPanel?
 - **Desacoplado e sob seu controle**: Não registra eventos globais ocultos nem interfere na renderização padrão do jogo. Você decide exatamente **quando**, **onde** e **para quem** renderizar chamando `.render(poseStack, buffer, packedLight)`.
+- **Elementos Prontos para HUDs**: Suporte nativo a barras de progresso/vida (`ProgressBar`), mostradores radiais (`RadialProgress`), grades de inventário (`ItemGrid`), presets instantâneos (`FloatingWindowPresets`) e utilitários anti-culling (`WorldPanelCulling`).
+- **Recursos Avançados de Câmera e Iluminação**: Modo holograma animado (`setHologram`), brilho total neon (`setFullBright`), visibilidade através de paredes (`setSeeThrough`), fade por distância (`setDistanceFade`) e tamanho constante na tela (`setConstantScreenSize`).
 - **Geometria e Layout Inteligentes**: Suporta desde retângulos arredondados até círculos, triângulos, hexágonos e losangos. O motor de layout ajusta automaticamente a posição e escala de cada linha de texto, ícone de item e separador para caber perfeitamente dentro do contorno real da forma escolhida.
 - **Renderização 2D e 3D Volumétrica**: Crie desde painéis planos clássicos até placas 3D com espessura física, iluminação lateral e textos com extrusão 3D.
 - **Cores e Efeitos Animados**: Gradientes estáticos ou animados, arco-íris (`Rainbow`), pulsação (`Pulse`) e transições suaves (`Fade`) prontos para uso em fundos, bordas e textos.
@@ -133,8 +135,14 @@ fun renderStatusPanel(
             thickness = 0.75f,
             margin = 2f
         )
+        .addProgressBar(
+            progress = 0.85f,
+            width = 65f,
+            height = 3.5f,
+            fillColor = WindowColor.Solid(0xFF4ADE80L)
+        )
         .addText(
-            text = "HP: 100 / 100",
+            text = "HP: 85 / 100",
             color = WindowColor.Solid(0xFF4ADE80),
             shadow = true
         )
@@ -143,6 +151,38 @@ fun renderStatusPanel(
     // 4. Renderiza na cena
     window.render(poseStack, buffer, packedLight)
 }
+```
+
+---
+
+## 🎨 Presets Prontos Instantâneos (`FloatingWindowPresets`)
+
+Para criar painéis sem precisar montar o layout do zero, utilize os templates prontos:
+
+```kotlin
+// Barra de vida de entidade ou chefe
+val healthBar = FloatingWindowPresets.healthBar(
+    name = "Dragão Ancião",
+    currentHp = 180f,
+    maxHp = 200f,
+    level = 50
+).build()
+
+// Holograma futurista para máquinas e computadores
+val holoDisplay = FloatingWindowPresets.hologramDisplay(
+    title = "SISTEMA CENTRAL",
+    subtext = "Operacional - 100%"
+).build()
+
+// Painel de energia de máquinas (FE/RF)
+val machinePanel = FloatingWindowPresets.machineStatus(
+    machineName = "Gerador Solar",
+    storedEnergy = 75000L,
+    maxEnergy = 100000L
+).build()
+
+// Placa de perigo / sinalização
+val danger = FloatingWindowPresets.dangerSign(warningText = "ALTA TENSÃO").build()
 ```
 
 ---

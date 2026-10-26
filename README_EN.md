@@ -6,6 +6,8 @@ Ideal for displaying **floating entity nametags**, **training dummy status panel
 
 ### Why use WorldPanel?
 - **Decoupled and under your control**: Does not register hidden global events or interfere with vanilla rendering. You decide **when**, **where**, and **for whom** to render by calling `.render(poseStack, buffer, packedLight)`.
+- **Ready-to-Use HUD Elements**: Native support for health/energy progress bars (`ProgressBar`), radial gauges (`RadialProgress`), inventory item grids (`ItemGrid`), instant templates (`FloatingWindowPresets`), and frustum culling utilities (`WorldPanelCulling`).
+- **Advanced Camera & Lighting Controls**: Animated holographic scanlines (`setHologram`), full bright neon mode (`setFullBright`), see-through wall rendering (`setSeeThrough`), distance-based fade/culling (`setDistanceFade`), and constant screen scaling (`setConstantScreenSize`).
 - **Smart Geometry & Shape-Aware Layout**: Supports everything from rounded rectangles to circles, triangles, hexagons, and rhombuses. The layout engine automatically adjusts the position and scale of each text line, item icon, and separator to fit cleanly inside the actual contour of the chosen shape.
 - **2D & Volumetric 3D Rendering**: Create classic flat panels or thick 3D plates complete with front, shaded side walls, back faces, and extruded 3D text.
 - **Animated Colors & Visual Effects**: Built-in static and animated gradients, rainbow (`Rainbow`), pulsing (`Pulse`), and smooth color transitions (`Fade`) ready for backgrounds, borders, and text.
@@ -133,8 +135,14 @@ fun renderStatusPanel(
             thickness = 0.75f,
             margin = 2f
         )
+        .addProgressBar(
+            progress = 0.85f,
+            width = 65f,
+            height = 3.5f,
+            fillColor = WindowColor.Solid(0xFF4ADE80L)
+        )
         .addText(
-            text = "HP: 100 / 100",
+            text = "HP: 85 / 100",
             color = WindowColor.Solid(0xFF4ADE80),
             shadow = true
         )
@@ -143,6 +151,38 @@ fun renderStatusPanel(
     // 4. Render in the scene
     window.render(poseStack, buffer, packedLight)
 }
+```
+
+---
+
+## 🎨 Instant HUD Presets (`FloatingWindowPresets`)
+
+Quickly instantiate common HUD elements without building the entire layout manually:
+
+```kotlin
+// Entity or Boss health bar
+val healthBar = FloatingWindowPresets.healthBar(
+    name = "Elder Dragon",
+    currentHp = 180f,
+    maxHp = 200f,
+    level = 50
+).build()
+
+// Futuristic hologram panel for sci-fi machines and terminals
+val holoDisplay = FloatingWindowPresets.hologramDisplay(
+    title = "CENTRAL CORE",
+    subtext = "Operational - 100%"
+).build()
+
+// Machine stored energy gauge (FE/RF)
+val machinePanel = FloatingWindowPresets.machineStatus(
+    machineName = "Solar Generator",
+    storedEnergy = 75000L,
+    maxEnergy = 100000L
+).build()
+
+// Triangular danger / warning sign
+val danger = FloatingWindowPresets.dangerSign(warningText = "HIGH VOLTAGE").build()
 ```
 
 ---
