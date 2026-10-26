@@ -660,8 +660,10 @@ object ShapeRenderer2D {
         val lightDirX = cos(lightAngleRad).toFloat()
         val lightDirY = sin(lightAngleRad).toFloat()
 
-        // 1. Back face at z = -thickness
+        // 1. Solid back face at z = -thickness (rendered both front-facing and rear-facing for 360° solid exterior)
         renderFill(matrix, builder, shape, bounds, sideColor, 0f, cornerRadius, -thickness, packedLight)
+        val backMatrix = Matrix4f(matrix).translate(bounds.centerX, 0f, 0f).scale(-1f, 1f, 1f).translate(-bounds.centerX, 0f, 0f)
+        renderFill(backMatrix, builder, shape, bounds, sideColor, 0f, cornerRadius, -thickness, packedLight)
 
         // 2. Side wall quads around polygon perimeter
         val polygon = shape.toPolygon(bounds.width, bounds.height) ?: return

@@ -402,4 +402,337 @@ interface WindowElement : MeasurableElement {
             }
         }
     }
+
+    /**
+     * A horizontal progress bar suitable for health bars, mana, energy (FE), and cooldowns.
+     */
+    class ProgressBar(
+        val progress: Float,
+        private val width: Float = 60f,
+        private val height: Float = 4f,
+        private val fillColor: WindowColor = WindowColor.Solid(0xFF4ADE80L),
+        private val backgroundColor: WindowColor = WindowColor.Solid(0xFF1E293BL),
+        private val borderColor: WindowColor? = WindowColor.Solid(0xFF475569L),
+        private val borderWidth: Float = 0.5f,
+        private val alignment: Text.TextAlignment = Text.TextAlignment.CENTER,
+    ) : WindowElement {
+        private val safeWidth = width.coerceAtLeast(1f)
+        private val safeHeight = height.coerceAtLeast(1f)
+        private val clampedProgress = progress.coerceIn(0f, 1f)
+
+        override val alignmentRatio: Float
+            get() = when (alignment) {
+                Text.TextAlignment.LEFT -> 0f
+                Text.TextAlignment.CENTER -> 0.5f
+                Text.TextAlignment.RIGHT -> 1f
+            }
+
+        override fun getWidth(): Float = safeWidth
+        override fun getHeight(): Float = safeHeight
+
+        override fun render(
+            poseStack: PoseStack,
+            collector: net.minecraft.client.renderer.OrderedSubmitNodeCollector,
+            x: Float,
+            y: Float,
+            availableWidth: Float,
+            packedLight: Int,
+        ) {
+            val drawX = x + when (alignment) {
+                Text.TextAlignment.LEFT -> 0f
+                Text.TextAlignment.CENTER -> max(0f, (availableWidth - safeWidth) / 2f)
+                Text.TextAlignment.RIGHT -> max(0f, availableWidth - safeWidth)
+            }
+
+            val time = WindowColor.currentTimeSeconds()
+
+            collector.submitCustomGeometry(poseStack, net.minecraft.client.renderer.rendertype.RenderTypes.textBackground()) { pose, builder ->
+                val matrix = pose.pose()
+                // 1. Background
+                val bgTL = backgroundColor.resolve(0f, 0f, time)
+                val bgBL = backgroundColor.resolve(0f, 1f, time)
+                val bgBR = backgroundColor.resolve(1f, 1f, time)
+                val bgTR = backgroundColor.resolve(1f, 0f, time)
+                builder.addVertex(matrix, drawX, y, 0.02f).setColor(bgTL.r, bgTL.g, bgTL.b, bgTL.a).setLight(packedLight)
+                builder.addVertex(matrix, drawX, y + safeHeight, 0.02f).setColor(bgBL.r, bgBL.g, bgBL.b, bgBL.a).setLight(packedLight)
+                builder.addVertex(matrix, drawX + safeWidth, y + safeHeight, 0.02f).setColor(bgBR.r, bgBR.g, bgBR.b, bgBR.a).setLight(packedLight)
+                builder.addVertex(matrix, drawX + safeWidth, y, 0.02f).setColor(bgTR.r, bgTR.g, bgTR.b, bgTR.a).setLight(packedLight)
+
+                // 2. Filled progress bar
+                val bw = if (borderColor != null) borderWidth.coerceAtLeast(0f) else 0f
+                val innerW = (safeWidth - bw * 2f).coerceAtLeast(0f)
+                val innerH = (safeHeight - bw * 2f).coerceAtLeast(0f)
+                val filledW = innerW * clampedProgress
+
+                if (filledW > 0.01f) {
+                    val fillX = drawX + bw
+                    val fillY = y + bw
+                    val fillTL = fillColor.resolve(0f, 0f, time)
+                    val fillBL = fillColor.resolve(0f, 1f, time)
+                    val fillBR = fillColor.resolve(clampedProgress, 1f, time)
+                    val fillTR = fillColor.resolve(clampedProgress, 0f, time)
+
+                    builder.addVertex(matrix, fillX, fillY, 0.04f).setColor(fillTL.r, fillTL.g, fillTL.b, fillTL.a).setLight(packedLight)
+                    builder.addVertex(matrix, fillX, fillY + innerH, 0.04f).setColor(fillBL.r, fillBL.g, fillBL.b, fillBL.a).setLight(packedLight)
+                    builder.addVertex(matrix, fillX + filledW, fillY + innerH, 0.04f).setColor(fillBR.r, fillBR.g, fillBR.b, fillBR.a).setLight(packedLight)
+                    builder.addVertex(matrix, fillX + filledW, fillY, 0.04f).setColor(fillTR.r, fillTR.g, fillTR.b, fillTR.a).setLight(packedLight)
+                }
+
+                // 3. Optional Border
+                if (borderColor != null && bw > 0f) {
+                    val bColor = borderColor.resolve(0.5f, 0.5f, time)
+                    val r = drawX + safeWidth
+                    val b = y + safeHeight
+
+                    // Top
+                    builder.addVertex(matrix, drawX, y, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+                    builder.addVertex(matrix, drawX, y + bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+                    builder.addVertex(matrix, r, y + bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+                    builder.addVertex(matrix, r, y, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+
+                    // Bottom
+                    builder.addVertex(matrix, drawX, b - bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+                    builder.addVertex(matrix, drawX, b, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+                    builder.addVertex(matrix, r, b, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+                    builder.addVertex(matrix, r, b - bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+
+                    // Left
+                    builder.addVertex(matrix, drawX, y + bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+                    builder.addVertex(matrix, drawX, b - bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+                    builder.addVertex(matrix, drawX + bw, b - bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+                    builder.addVertex(matrix, drawX + bw, y + bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+
+                    // Right
+                    builder.addVertex(matrix, r - bw, y + bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+                    builder.addVertex(matrix, r - bw, b - bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+                    builder.addVertex(matrix, r, b - bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+                    builder.addVertex(matrix, r, y + bw, 0.05f).setColor(bColor.r, bColor.g, bColor.b, bColor.a).setLight(packedLight)
+                }
+            }
+        }
+    }
+
+    /**
+     * A circular 360-degree radial gauge with custom fill arc and background ring.
+     */
+    class RadialProgress(
+        val progress: Float,
+        private val radius: Float = 8f,
+        private val thickness: Float = 2.5f,
+        private val fillColor: WindowColor = WindowColor.Solid(0xFF38BDF8L),
+        private val backgroundColor: WindowColor = WindowColor.Solid(0x4438BDF8L),
+        private val startAngleDegrees: Float = -90f,
+        private val alignment: Text.TextAlignment = Text.TextAlignment.CENTER,
+    ) : WindowElement {
+        private val safeRadius = radius.coerceAtLeast(1f)
+        private val safeThickness = thickness.coerceIn(0.5f, safeRadius)
+        private val clampedProgress = progress.coerceIn(0f, 1f)
+
+        override val alignmentRatio: Float
+            get() = when (alignment) {
+                Text.TextAlignment.LEFT -> 0f
+                Text.TextAlignment.CENTER -> 0.5f
+                Text.TextAlignment.RIGHT -> 1f
+            }
+
+        override fun getWidth(): Float = safeRadius * 2f
+        override fun getHeight(): Float = safeRadius * 2f
+
+        override fun render(
+            poseStack: PoseStack,
+            collector: net.minecraft.client.renderer.OrderedSubmitNodeCollector,
+            x: Float,
+            y: Float,
+            availableWidth: Float,
+            packedLight: Int,
+        ) {
+            val totalW = getWidth()
+            val drawX = x + when (alignment) {
+                Text.TextAlignment.LEFT -> 0f
+                Text.TextAlignment.CENTER -> max(0f, (availableWidth - totalW) / 2f)
+                Text.TextAlignment.RIGHT -> max(0f, availableWidth - totalW)
+            }
+
+            val cx = drawX + safeRadius
+            val cy = y + safeRadius
+            val rOuter = safeRadius
+            val rInner = safeRadius - safeThickness
+            val time = WindowColor.currentTimeSeconds()
+
+            val segments = 36
+            val startRad = startAngleDegrees * (kotlin.math.PI.toFloat() / 180f)
+
+            collector.submitCustomGeometry(poseStack, net.minecraft.client.renderer.rendertype.RenderTypes.textBackground()) { pose, builder ->
+                val matrix = pose.pose()
+                // 1. Background ring
+                for (i in 0 until segments) {
+                    val a0 = startRad + (i.toFloat() / segments.toFloat()) * (2f * kotlin.math.PI.toFloat())
+                    val a1 = startRad + ((i + 1).toFloat() / segments.toFloat()) * (2f * kotlin.math.PI.toFloat())
+                    val c0 = backgroundColor.resolve(i.toFloat() / segments.toFloat(), 0f, time)
+                    val c1 = backgroundColor.resolve((i + 1).toFloat() / segments.toFloat(), 0f, time)
+
+                    val x0Out = cx + rOuter * kotlin.math.cos(a0)
+                    val y0Out = cy + rOuter * kotlin.math.sin(a0)
+                    val x1Out = cx + rOuter * kotlin.math.cos(a1)
+                    val y1Out = cy + rOuter * kotlin.math.sin(a1)
+
+                    val x0In = cx + rInner * kotlin.math.cos(a0)
+                    val y0In = cy + rInner * kotlin.math.sin(a0)
+                    val x1In = cx + rInner * kotlin.math.cos(a1)
+                    val y1In = cy + rInner * kotlin.math.sin(a1)
+
+                    builder.addVertex(matrix, x0Out, y0Out, 0.02f).setColor(c0.r, c0.g, c0.b, c0.a).setLight(packedLight)
+                    builder.addVertex(matrix, x0In, y0In, 0.02f).setColor(c0.r, c0.g, c0.b, c0.a).setLight(packedLight)
+                    builder.addVertex(matrix, x1In, y1In, 0.02f).setColor(c1.r, c1.g, c1.b, c1.a).setLight(packedLight)
+                    builder.addVertex(matrix, x1Out, y1Out, 0.02f).setColor(c1.r, c1.g, c1.b, c1.a).setLight(packedLight)
+                }
+
+                // 2. Active Progress Arc
+                if (clampedProgress > 0.005f) {
+                    val activeSegments = (segments * clampedProgress).toInt().coerceAtLeast(1)
+                    val totalProgressRad = clampedProgress * (2f * kotlin.math.PI.toFloat())
+
+                    for (i in 0 until activeSegments) {
+                        val frac0 = i.toFloat() / activeSegments.toFloat()
+                        val frac1 = (i + 1).toFloat() / activeSegments.toFloat()
+                        val a0 = startRad + frac0 * totalProgressRad
+                        val a1 = startRad + frac1 * totalProgressRad
+
+                        val c0 = fillColor.resolve(frac0 * clampedProgress, 0f, time)
+                        val c1 = fillColor.resolve(frac1 * clampedProgress, 0f, time)
+
+                        val x0Out = cx + rOuter * kotlin.math.cos(a0)
+                        val y0Out = cy + rOuter * kotlin.math.sin(a0)
+                        val x1Out = cx + rOuter * kotlin.math.cos(a1)
+                        val y1Out = cy + rOuter * kotlin.math.sin(a1)
+
+                        val x0In = cx + rInner * kotlin.math.cos(a0)
+                        val y0In = cy + rInner * kotlin.math.sin(a0)
+                        val x1In = cx + rInner * kotlin.math.cos(a1)
+                        val y1In = cy + rInner * kotlin.math.sin(a1)
+
+                        builder.addVertex(matrix, x0Out, y0Out, 0.04f).setColor(c0.r, c0.g, c0.b, c0.a).setLight(packedLight)
+                        builder.addVertex(matrix, x0In, y0In, 0.04f).setColor(c0.r, c0.g, c0.b, c0.a).setLight(packedLight)
+                        builder.addVertex(matrix, x1In, y1In, 0.04f).setColor(c1.r, c1.g, c1.b, c1.a).setLight(packedLight)
+                        builder.addVertex(matrix, x1Out, y1Out, 0.04f).setColor(c1.r, c1.g, c1.b, c1.a).setLight(packedLight)
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * A grid of items (e.g. 3x3 loot chest, machine inputs/outputs, inventory preview).
+     */
+    class ItemGrid(
+        private val items: List<ItemStack>,
+        private val columns: Int = 3,
+        private val slotSize: Float = 16f,
+        private val spacing: Float = 2f,
+        private val slotBackground: WindowColor? = WindowColor.Solid(0x33000000L),
+        private val slotBorder: WindowColor? = WindowColor.Solid(0x44FFFFFFL),
+        private val alignment: Text.TextAlignment = Text.TextAlignment.CENTER,
+    ) : WindowElement {
+        private val safeCols = columns.coerceAtLeast(1)
+        private val rows = ((items.size + safeCols - 1) / safeCols).coerceAtLeast(1)
+        private val totalWidth = safeCols * slotSize + (safeCols - 1) * spacing
+        private val totalHeight = rows * slotSize + (rows - 1) * spacing
+
+        override val alignmentRatio: Float
+            get() = when (alignment) {
+                Text.TextAlignment.LEFT -> 0f
+                Text.TextAlignment.CENTER -> 0.5f
+                Text.TextAlignment.RIGHT -> 1f
+            }
+
+        override fun getWidth(): Float = totalWidth
+        override fun getHeight(): Float = totalHeight
+
+        override fun render(
+            poseStack: PoseStack,
+            collector: net.minecraft.client.renderer.OrderedSubmitNodeCollector,
+            x: Float,
+            y: Float,
+            availableWidth: Float,
+            packedLight: Int,
+        ) {
+            val drawX = x + when (alignment) {
+                Text.TextAlignment.LEFT -> 0f
+                Text.TextAlignment.CENTER -> max(0f, (availableWidth - totalWidth) / 2f)
+                Text.TextAlignment.RIGHT -> max(0f, availableWidth - totalWidth)
+            }
+
+            val time = WindowColor.currentTimeSeconds()
+
+            // 1. Draw slot background boxes and borders if present
+            if (slotBackground != null || slotBorder != null) {
+                collector.submitCustomGeometry(poseStack, net.minecraft.client.renderer.rendertype.RenderTypes.textBackground()) { pose, builder ->
+                    val matrix = pose.pose()
+                    for (row in 0 until rows) {
+                        for (col in 0 until safeCols) {
+                            val slotX = drawX + col * (slotSize + spacing)
+                            val slotY = y + row * (slotSize + spacing)
+
+                            if (slotBackground != null) {
+                                val c = slotBackground.resolve(0.5f, 0.5f, time)
+                                builder.addVertex(matrix, slotX, slotY, 0.01f).setColor(c.r, c.g, c.b, c.a).setLight(packedLight)
+                                builder.addVertex(matrix, slotX, slotY + slotSize, 0.01f).setColor(c.r, c.g, c.b, c.a).setLight(packedLight)
+                                builder.addVertex(matrix, slotX + slotSize, slotY + slotSize, 0.01f).setColor(c.r, c.g, c.b, c.a).setLight(packedLight)
+                                builder.addVertex(matrix, slotX + slotSize, slotY, 0.01f).setColor(c.r, c.g, c.b, c.a).setLight(packedLight)
+                            }
+
+                            if (slotBorder != null) {
+                                val bc = slotBorder.resolve(0.5f, 0.5f, time)
+                                val bw = 0.5f
+                                val r = slotX + slotSize
+                                val b = slotY + slotSize
+
+                                builder.addVertex(matrix, slotX, slotY, 0.02f).setColor(bc.r, bc.g, bc.b, bc.a).setLight(packedLight)
+                                builder.addVertex(matrix, slotX, slotY + bw, 0.02f).setColor(bc.r, bc.g, bc.b, bc.a).setLight(packedLight)
+                                builder.addVertex(matrix, r, slotY + bw, 0.02f).setColor(bc.r, bc.g, bc.b, bc.a).setLight(packedLight)
+                                builder.addVertex(matrix, r, slotY, 0.02f).setColor(bc.r, bc.g, bc.b, bc.a).setLight(packedLight)
+
+                                builder.addVertex(matrix, slotX, b - bw, 0.02f).setColor(bc.r, bc.g, bc.b, bc.a).setLight(packedLight)
+                                builder.addVertex(matrix, slotX, b, 0.02f).setColor(bc.r, bc.g, bc.b, bc.a).setLight(packedLight)
+                                builder.addVertex(matrix, r, b, 0.02f).setColor(bc.r, bc.g, bc.b, bc.a).setLight(packedLight)
+                                builder.addVertex(matrix, r, b - bw, 0.02f).setColor(bc.r, bc.g, bc.b, bc.a).setLight(packedLight)
+
+                                builder.addVertex(matrix, slotX, slotY + bw, 0.02f).setColor(bc.r, bc.g, bc.b, bc.a).setLight(packedLight)
+                                builder.addVertex(matrix, slotX, b - bw, 0.02f).setColor(bc.r, bc.g, bc.b, bc.a).setLight(packedLight)
+                                builder.addVertex(matrix, slotX + bw, b - bw, 0.02f).setColor(bc.r, bc.g, bc.b, bc.a).setLight(packedLight)
+                                builder.addVertex(matrix, slotX + bw, slotY + bw, 0.02f).setColor(bc.r, bc.g, bc.b, bc.a).setLight(packedLight)
+
+                                builder.addVertex(matrix, r - bw, slotY + bw, 0.02f).setColor(bc.r, bc.g, bc.b, bc.a).setLight(packedLight)
+                                builder.addVertex(matrix, r - bw, b - bw, 0.02f).setColor(bc.r, bc.g, bc.b, bc.a).setLight(packedLight)
+                                builder.addVertex(matrix, r, b - bw, 0.02f).setColor(bc.r, bc.g, bc.b, bc.a).setLight(packedLight)
+                                builder.addVertex(matrix, r, slotY + bw, 0.02f).setColor(bc.r, bc.g, bc.b, bc.a).setLight(packedLight)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. Render items in each slot
+            for ((index, item) in items.withIndex()) {
+                if (item.isEmpty) continue
+                val col = index % safeCols
+                val row = index / safeCols
+                if (row >= rows) break
+
+                val slotX = drawX + col * (slotSize + spacing)
+                val slotY = y + row * (slotSize + spacing)
+
+                WorldPanelItemRenderer.render(
+                    stack = item,
+                    iconSize = slotSize,
+                    poseStack = poseStack,
+                    collector = collector,
+                    x = slotX,
+                    y = slotY,
+                    packedLight = packedLight
+                )
+            }
+        }
+    }
+
 }

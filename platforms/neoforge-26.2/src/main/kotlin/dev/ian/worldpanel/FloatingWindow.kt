@@ -79,6 +79,15 @@ class FloatingWindow private constructor(
     val offsetRelativeToOrientation: Boolean = true,
     val renderOrder: Int = 0,
     val renderBackFace: Boolean = false,
+    val fullBright: Boolean = false,
+    val seeThrough: Boolean = false,
+    val distanceFadeMin: Double? = null,
+    val distanceFadeMax: Double? = null,
+    val constantScreenSize: Boolean = false,
+    val referenceDistance: Double = 8.0,
+    val hologram: Boolean = false,
+    val hologramScanlineSpacing: Float = 2.5f,
+    val hologramScanlineSpeed: Float = 1.5f,
 ) {
     enum class ContentFit {
         EXPAND_TO_CONTENT,
@@ -237,6 +246,20 @@ class FloatingWindow private constructor(
         val totalOffsetY = offsetWorldY + animOffsetY
         val totalOffsetZ = offsetWorldZ + animOffsetZ
 
+        val camera = Minecraft.getInstance().gameRenderer.mainCamera()
+        val cameraPos = camera.position()
+        val targetWorldX = if (attachedEntity != null) attachedEntity.x else totalOffsetX
+        val targetWorldY = if (attachedEntity != null) attachedEntity.y + totalOffsetY else totalOffsetY
+        val targetWorldZ = if (attachedEntity != null) attachedEntity.z else totalOffsetZ
+        val dx = cameraPos.x - targetWorldX
+        val dy = cameraPos.y - targetWorldY
+        val dz = cameraPos.z - targetWorldZ
+        val distance = kotlin.math.sqrt(dx * dx + dy * dy + dz * dz)
+
+        if (distanceFadeMax != null && distance > distanceFadeMax) {
+            return
+        }
+
         val hasOrientation = !faceCamera && (attachedEntity != null || fixedYaw != 0f || fixedPitch != 0f || fixedRoll != 0f)
 
         poseStack.pushPose()
@@ -272,7 +295,16 @@ class FloatingWindow private constructor(
         if (animPitch != 0f) poseStack.mulPose(Axis.XP.rotationDegrees(animPitch))
         if (animRoll != 0f) poseStack.mulPose(Axis.ZP.rotationDegrees(animRoll))
 
-        poseStack.scale(scale, -scale, scale)
+        val effectiveScale = if (constantScreenSize && distance > 0.001) {
+            (scale * (distance / referenceDistance.coerceAtLeast(0.1))).toFloat().coerceIn(scale * 0.1f, scale * 25f)
+        } else {
+            scale
+        }
+        poseStack.scale(effectiveScale, -effectiveScale, effectiveScale)
+        if (seeThrough) {
+            poseStack.translate(0.0, 0.0, 0.02)
+        }
+        val effectiveLight = if (fullBright) 0xF000F0 else packedLight
 
         val panelBounds = RectF(
             layout.left,
@@ -300,7 +332,8 @@ class FloatingWindow private constructor(
         // Render back face if enabled and window is not billboarded (fixed orientation)
         if (!faceCamera && renderBackFace) {
             poseStack.pushPose()
-            poseStack.translate(panelBounds.centerX.toDouble(), 0.0, -0.002)
+            val backZ = if (panelRenderMode == PanelRenderMode.VOLUME_3D) -volume3DConfig.thickness.toDouble() else -0.002
+            poseStack.translate(panelBounds.centerX.toDouble(), 0.0, backZ)
             poseStack.mulPose(Axis.YP.rotationDegrees(180f))
             poseStack.translate(-panelBounds.centerX.toDouble(), 0.0, 0.0)
             val backColor = border ?: background
@@ -314,7 +347,7 @@ class FloatingWindow private constructor(
                 borderWidth = borderWidth,
                 cornerRadius = cornerRadius,
                 depthStyle = DepthStyle.FLAT,
-                packedLight = packedLight,
+                packedLight = effectiveLight,
                 renderMode = PanelRenderMode.FLAT_2D,
             )
             poseStack.popPose()
@@ -331,7 +364,7 @@ class FloatingWindow private constructor(
             borderWidth = borderWidth,
             cornerRadius = cornerRadius,
             depthStyle = effectiveDepth,
-            packedLight = packedLight,
+            packedLight = effectiveLight,
             renderMode = panelRenderMode,
             volumeConfig = volume3DConfig,
         )
@@ -378,7 +411,7 @@ class FloatingWindow private constructor(
                     0f,
                     0f,
                     availW,
-                    packedLight
+                    effectiveLight
                 )
                 poseStack.popPose()
             }
@@ -501,7 +534,7 @@ class FloatingWindow private constructor(
                     x = drawX,
                     y = currentY,
                     availableWidth = drawW,
-                    packedLight = packedLight
+                    packedLight = effectiveLight
                 )
                 currentY += elemH
             }
@@ -566,14 +599,46 @@ class FloatingWindow private constructor(
                     x = drawX,
                     y = currentY,
                     availableWidth = drawW,
-                    packedLight = packedLight
+                    packedLight = effectiveLight
                 )
                 currentY += elemH
             }
             poseStack.popPose()
         }
 
+        if (hologram) {
+            renderHologramScanlines(poseStack, collector, panelBounds, timeSeconds, hologramScanlineSpacing, hologramScanlineSpeed)
+        }
+
         poseStack.popPose()
+    }
+
+    private fun renderHologramScanlines(
+        poseStack: PoseStack,
+        collector: SubmitNodeCollector,
+        bounds: RectF,
+        timeSeconds: Double,
+        spacing: Float,
+        speed: Float,
+    ) {
+        val totalHeight = bounds.height
+        val numLines = (totalHeight / spacing.coerceAtLeast(1f)).toInt().coerceIn(4, 60)
+        val lineThickness = 0.5f
+        val scanOffset = ((timeSeconds * speed * 20.0) % spacing.toDouble()).toFloat()
+        val flicker = 0.18f + 0.04f * kotlin.math.sin(timeSeconds * 16.0).toFloat()
+
+        collector.submitCustomGeometry(poseStack, net.minecraft.client.renderer.rendertype.RenderTypes.textBackground()) { pose, builder ->
+            val matrix = pose.pose()
+            for (i in 0 until numLines) {
+                val y = bounds.top + (i * spacing + scanOffset) % totalHeight
+                if (y + lineThickness <= bounds.bottom) {
+                    builder.addVertex(matrix, bounds.left, y, 0.15f).setColor(0.22f, 0.74f, 0.97f, flicker).setLight(0xF000F0)
+                    builder.addVertex(matrix, bounds.left, y + lineThickness, 0.15f).setColor(0.22f, 0.74f, 0.97f, flicker).setLight(0xF000F0)
+                    builder.addVertex(matrix, bounds.right, y + lineThickness, 0.15f).setColor(0.22f, 0.74f, 0.97f, flicker).setLight(0xF000F0)
+                    builder.addVertex(matrix, bounds.right, y, 0.15f).setColor(0.22f, 0.74f, 0.97f, flicker).setLight(0xF000F0)
+                }
+            }
+        }
     }
 
     class Builder {
@@ -619,6 +684,15 @@ class FloatingWindow private constructor(
         private var offsetZ = 0.0
         private var renderOrder = 0
         private var renderBackFace = false
+        private var fullBright = false
+        private var seeThrough = false
+        private var distanceFadeMin: Double? = null
+        private var distanceFadeMax: Double? = null
+        private var constantScreenSize = false
+        private var referenceDistance = 8.0
+        private var hologram = false
+        private var hologramScanlineSpacing = 2.5f
+        private var hologramScanlineSpeed = 1.5f
         private val animations = mutableListOf<PanelAnimation>()
 
         /** Sets the 2D geometric or custom texture contour for this window. */
@@ -1173,6 +1247,84 @@ class FloatingWindow private constructor(
         fun setRenderBackFace(renderBackFace: Boolean = true) = apply { this.renderBackFace = renderBackFace }
         fun setDoubleSided(doubleSided: Boolean = true) = setRenderBackFace(doubleSided)
 
+        fun addProgressBar(
+            progress: Float,
+            width: Float = 60f,
+            height: Float = 4f,
+            fillColor: WindowColor = WindowColor.Solid(0xFF4ADE80L),
+            backgroundColor: WindowColor = WindowColor.Solid(0xFF1E293BL),
+            borderColor: WindowColor? = WindowColor.Solid(0xFF475569L),
+            borderWidth: Float = 0.5f,
+            alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
+        ) = apply {
+            items += LayoutItem(
+                element = WindowElement.ProgressBar(progress, width, height, fillColor, backgroundColor, borderColor, borderWidth, alignment),
+                position = null,
+                targetRegion = null
+            )
+        }
+
+        fun addRadialProgress(
+            progress: Float,
+            radius: Float = 8f,
+            thickness: Float = 2.5f,
+            fillColor: WindowColor = WindowColor.Solid(0xFF38BDF8L),
+            backgroundColor: WindowColor = WindowColor.Solid(0x4438BDF8L),
+            startAngleDegrees: Float = -90f,
+            alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
+        ) = apply {
+            items += LayoutItem(
+                element = WindowElement.RadialProgress(progress, radius, thickness, fillColor, backgroundColor, startAngleDegrees, alignment),
+                position = null,
+                targetRegion = null
+            )
+        }
+
+        fun addItemGrid(
+            items: List<net.minecraft.world.item.ItemStack>,
+            columns: Int = 3,
+            slotSize: Float = 16f,
+            spacing: Float = 2f,
+            slotBackground: WindowColor? = WindowColor.Solid(0x33000000L),
+            slotBorder: WindowColor? = WindowColor.Solid(0x44FFFFFFL),
+            alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
+        ) = apply {
+            this.items += LayoutItem(
+                element = WindowElement.ItemGrid(items, columns, slotSize, spacing, slotBackground, slotBorder, alignment),
+                position = null,
+                targetRegion = null
+            )
+        }
+
+        /** Ignores ambient block and sky light, rendering the panel at 100% full brightness. */
+        fun setFullBright(enabled: Boolean = true) = apply { this.fullBright = enabled }
+
+        /** Renders the panel visible even through solid walls. */
+        fun setSeeThrough(enabled: Boolean = true) = apply { this.seeThrough = enabled }
+
+        /** Configures smooth distance fade-out and automatic culling beyond [maxDistance] blocks. */
+        fun setDistanceFade(minDistance: Double, maxDistance: Double) = apply {
+            this.distanceFadeMin = minDistance.coerceAtLeast(0.0)
+            this.distanceFadeMax = maxDistance.coerceAtLeast(minDistance)
+        }
+
+        /** Keeps visual screen size constant regardless of distance from camera. */
+        fun setConstantScreenSize(enabled: Boolean = true, referenceDistance: Double = 8.0) = apply {
+            this.constantScreenSize = enabled
+            this.referenceDistance = referenceDistance.coerceAtLeast(0.1)
+        }
+
+        /** Overlays animated cyan sci-fi scanlines across the window. */
+        fun setHologram(
+            enabled: Boolean = true,
+            scanlineSpacing: Float = 2.5f,
+            scanlineSpeed: Float = 1.5f,
+        ) = apply {
+            this.hologram = enabled
+            this.hologramScanlineSpacing = scanlineSpacing
+            this.hologramScanlineSpeed = scanlineSpeed
+        }
+
         fun build(): FloatingWindow {
             val effectiveShape = shape ?: PanelShape.roundedRectangle(cornerRadius)
             return FloatingWindow(
@@ -1215,6 +1367,15 @@ class FloatingWindow private constructor(
                 offsetRelativeToOrientation = offsetRelativeToOrientation,
                 renderOrder = renderOrder,
                 renderBackFace = renderBackFace,
+                fullBright = fullBright,
+                seeThrough = seeThrough,
+                distanceFadeMin = distanceFadeMin,
+                distanceFadeMax = distanceFadeMax,
+                constantScreenSize = constantScreenSize,
+                referenceDistance = referenceDistance,
+                hologram = hologram,
+                hologramScanlineSpacing = hologramScanlineSpacing,
+                hologramScanlineSpeed = hologramScanlineSpeed,
             )
         }
     }

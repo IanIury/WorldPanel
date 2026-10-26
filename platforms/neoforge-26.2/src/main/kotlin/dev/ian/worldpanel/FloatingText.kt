@@ -37,6 +37,12 @@ class FloatingText private constructor(
         private var offsetZ: Double = 0.0
         private var renderOrder: Int = 0
         private var renderBackFace: Boolean = false
+        private var fullBright: Boolean = false
+        private var seeThrough: Boolean = false
+        private var distanceFadeMin: Double? = null
+        private var distanceFadeMax: Double? = null
+        private var constantScreenSize: Boolean = false
+        private var referenceDistance: Double = 8.0
         private var lineSpacing: Float = 2f
         private var offsetRelativeToOrientation: Boolean = true
         private val animations = mutableListOf<PanelAnimation>()
@@ -220,6 +226,17 @@ class FloatingText private constructor(
         }
 
         fun setDoubleSided(doubleSided: Boolean = true) = setRenderBackFace(doubleSided)
+
+        fun setFullBright(enabled: Boolean = true) = apply { this.fullBright = enabled }
+        fun setSeeThrough(enabled: Boolean = true) = apply { this.seeThrough = enabled }
+        fun setDistanceFade(minDistance: Double, maxDistance: Double) = apply {
+            this.distanceFadeMin = minDistance.coerceAtLeast(0.0)
+            this.distanceFadeMax = maxDistance.coerceAtLeast(minDistance)
+        }
+        fun setConstantScreenSize(enabled: Boolean = true, referenceDistance: Double = 8.0) = apply {
+            this.constantScreenSize = enabled
+            this.referenceDistance = referenceDistance.coerceAtLeast(0.1)
+        }
 
         fun addAnimation(animation: PanelAnimation) = apply {
             animations += animation
