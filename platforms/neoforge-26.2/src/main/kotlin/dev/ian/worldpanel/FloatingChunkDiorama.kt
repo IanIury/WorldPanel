@@ -42,10 +42,21 @@ class FloatingChunkDiorama private constructor(
     val pivotAtBase: Boolean,
 ) {
     companion object {
-        private val IS_RENDERING_DIORAMA = ThreadLocal.withInitial { false }
+        @PublishedApi
+        internal val IS_RENDERING_DIORAMA = ThreadLocal.withInitial { false }
 
         /** Returns true if a chunk diorama is currently rendering on this thread. */
         fun isRenderingDiorama(): Boolean = IS_RENDERING_DIORAMA.get()
+
+        inline fun <T> withDioramaLock(block: () -> T): T? {
+            if (IS_RENDERING_DIORAMA.get()) return null
+            IS_RENDERING_DIORAMA.set(true)
+            try {
+                return block()
+            } finally {
+                IS_RENDERING_DIORAMA.set(false)
+            }
+        }
 
         fun builder(): Builder = Builder()
     }
@@ -63,9 +74,7 @@ class FloatingChunkDiorama private constructor(
     )
 
     fun render(poseStack: PoseStack, collector: OrderedSubmitNodeCollector, packedLight: Int) {
-        if (IS_RENDERING_DIORAMA.get()) return
-        IS_RENDERING_DIORAMA.set(true)
-        try {
+        withDioramaLock {
             sampler.updateIfNeeded()
 
             val timeSeconds = WindowColor.currentTimeSeconds()
@@ -116,8 +125,6 @@ class FloatingChunkDiorama private constructor(
             }
 
             poseStack.popPose()
-        } finally {
-            IS_RENDERING_DIORAMA.set(false)
         }
     }
 
@@ -247,6 +254,12 @@ class FloatingChunkDiorama private constructor(
             if (showGlassEnclosure) {
                 val gCol = glassColor.resolve(0.5f, 0.5f, timeSeconds)
                 val alpha = gCol.a * 0.22f
+
+                // Bottom
+                builder.addVertex(matrix, minX, minY, minZ).setColor(gCol.r, gCol.g, gCol.b, alpha)
+                builder.addVertex(matrix, maxX, minY, minZ).setColor(gCol.r, gCol.g, gCol.b, alpha)
+                builder.addVertex(matrix, maxX, minY, maxZ).setColor(gCol.r, gCol.g, gCol.b, alpha)
+                builder.addVertex(matrix, minX, minY, maxZ).setColor(gCol.r, gCol.g, gCol.b, alpha)
 
                 // Top
                 builder.addVertex(matrix, minX, maxY, minZ).setColor(gCol.r, gCol.g, gCol.b, alpha)

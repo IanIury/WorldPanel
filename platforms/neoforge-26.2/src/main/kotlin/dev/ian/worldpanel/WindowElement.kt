@@ -998,11 +998,11 @@ interface WindowElement : MeasurableElement {
             val time = WindowColor.currentTimeSeconds()
             val renderType = if (seeThrough) RenderTypes.textBackgroundSeeThrough() else RenderTypes.textBackground()
 
-            val playerHalfDepth = (safeHeight * 0.35f).coerceAtLeast(1.0f)
-            val playerZ = playerHalfDepth + 0.05f
-            val overlayZ = max(10.0f, playerZ + playerHalfDepth + 0.05f)
-            val borderZ = overlayZ + 0.01f
-            val textZ = overlayZ + 0.02f
+            val bgZ = 0.005f
+            val playerZ = 0.01f
+            val overlayZ = 0.02f
+            val borderZ = 0.022f
+            val textZ = 0.025f
 
             val bgCollector = (collector as? SubmitNodeCollector)?.order(0) ?: collector
             val entityCollector = (collector as? SubmitNodeCollector)?.order(1) ?: collector
@@ -1013,28 +1013,28 @@ interface WindowElement : MeasurableElement {
                 val matrix = pose.pose()
                 when (style) {
                     VideoFeedStyle.CLEAN -> {
-                        bgBuilder.addVertex(matrix, drawX, y, 0.01f).setColor(0.05f, 0.05f, 0.05f, 0.5f).setLight(packedLight)
-                        bgBuilder.addVertex(matrix, drawX, y + safeHeight, 0.01f).setColor(0.05f, 0.05f, 0.05f, 0.5f).setLight(packedLight)
-                        bgBuilder.addVertex(matrix, drawX + safeWidth, y + safeHeight, 0.01f).setColor(0.05f, 0.05f, 0.05f, 0.5f).setLight(packedLight)
-                        bgBuilder.addVertex(matrix, drawX + safeWidth, y, 0.01f).setColor(0.05f, 0.05f, 0.05f, 0.5f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, drawX, y, bgZ).setColor(0.05f, 0.05f, 0.05f, 0.5f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, drawX, y + safeHeight, bgZ).setColor(0.05f, 0.05f, 0.05f, 0.5f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, drawX + safeWidth, y + safeHeight, bgZ).setColor(0.05f, 0.05f, 0.05f, 0.5f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, drawX + safeWidth, y, bgZ).setColor(0.05f, 0.05f, 0.05f, 0.5f).setLight(packedLight)
                     }
                     VideoFeedStyle.SECURITY_CAMERA_CCTV -> {
-                        bgBuilder.addVertex(matrix, drawX, y, 0.01f).setColor(0.02f, 0.04f, 0.06f, 0.85f).setLight(packedLight)
-                        bgBuilder.addVertex(matrix, drawX, y + safeHeight, 0.01f).setColor(0.02f, 0.04f, 0.06f, 0.85f).setLight(packedLight)
-                        bgBuilder.addVertex(matrix, drawX + safeWidth, y + safeHeight, 0.01f).setColor(0.02f, 0.04f, 0.06f, 0.85f).setLight(packedLight)
-                        bgBuilder.addVertex(matrix, drawX + safeWidth, y, 0.01f).setColor(0.02f, 0.04f, 0.06f, 0.85f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, drawX, y, bgZ).setColor(0.02f, 0.04f, 0.06f, 0.85f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, drawX, y + safeHeight, bgZ).setColor(0.02f, 0.04f, 0.06f, 0.85f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, drawX + safeWidth, y + safeHeight, bgZ).setColor(0.02f, 0.04f, 0.06f, 0.85f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, drawX + safeWidth, y, bgZ).setColor(0.02f, 0.04f, 0.06f, 0.85f).setLight(packedLight)
                     }
                     VideoFeedStyle.CRT_SCANLINES -> {
-                        bgBuilder.addVertex(matrix, drawX, y, 0.01f).setColor(0.01f, 0.01f, 0.02f, 0.90f).setLight(packedLight)
-                        bgBuilder.addVertex(matrix, drawX, y + safeHeight, 0.01f).setColor(0.01f, 0.01f, 0.02f, 0.90f).setLight(packedLight)
-                        bgBuilder.addVertex(matrix, drawX + safeWidth, y + safeHeight, 0.01f).setColor(0.01f, 0.01f, 0.02f, 0.90f).setLight(packedLight)
-                        bgBuilder.addVertex(matrix, drawX + safeWidth, y, 0.01f).setColor(0.01f, 0.01f, 0.02f, 0.90f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, drawX, y, bgZ).setColor(0.01f, 0.01f, 0.02f, 0.90f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, drawX, y + safeHeight, bgZ).setColor(0.01f, 0.01f, 0.02f, 0.90f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, drawX + safeWidth, y + safeHeight, bgZ).setColor(0.01f, 0.01f, 0.02f, 0.90f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, drawX + safeWidth, y, bgZ).setColor(0.01f, 0.01f, 0.02f, 0.90f).setLight(packedLight)
                     }
                     VideoFeedStyle.CYBER_GREEN_HOLOGRAM -> {
-                        bgBuilder.addVertex(matrix, drawX, y, 0.01f).setColor(0.0f, 0.12f, 0.04f, 0.65f).setLight(packedLight)
-                        bgBuilder.addVertex(matrix, drawX, y + safeHeight, 0.01f).setColor(0.0f, 0.08f, 0.02f, 0.65f).setLight(packedLight)
-                        bgBuilder.addVertex(matrix, drawX + safeWidth, y + safeHeight, 0.01f).setColor(0.0f, 0.08f, 0.02f, 0.65f).setLight(packedLight)
-                        bgBuilder.addVertex(matrix, drawX + safeWidth, y, 0.01f).setColor(0.0f, 0.12f, 0.04f, 0.65f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, drawX, y, bgZ).setColor(0.0f, 0.12f, 0.04f, 0.65f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, drawX, y + safeHeight, bgZ).setColor(0.0f, 0.08f, 0.02f, 0.65f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, drawX + safeWidth, y + safeHeight, bgZ).setColor(0.0f, 0.08f, 0.02f, 0.65f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, drawX + safeWidth, y, bgZ).setColor(0.0f, 0.12f, 0.04f, 0.65f).setLight(packedLight)
                     }
                 }
             }
@@ -1071,9 +1071,11 @@ interface WindowElement : MeasurableElement {
                         }
 
                 poseStack.pushPose()
-                poseStack.translate(drawX.toDouble() + safeWidth / 2.0, y.toDouble() + safeHeight * 0.92, playerZ.toDouble())
-                poseStack.scale(scaleFactor, -scaleFactor, scaleFactor)
-                poseStack.mulPose(Axis.YP.rotationDegrees(rotY.toFloat()))
+                poseStack.translate(drawX.toDouble() + safeWidth / 2.0, y.toDouble() + safeHeight * 0.88, playerZ.toDouble())
+                poseStack.scale(scaleFactor, -scaleFactor, scaleFactor * 0.1f)
+                if (rotY != 0.0) {
+                    poseStack.mulPose(Axis.YP.rotationDegrees(rotY.toFloat()))
+                }
 
                 try {
                     dispatcher.submit(
@@ -1181,7 +1183,7 @@ interface WindowElement : MeasurableElement {
 
     /**
      * Renders a true 2D flat video or camera feed (CCTV security monitor, spatial world camera,
-     * or biometric entity feed) strictly contained to the Z = 0 plane using an isolated RenderTarget texture.
+     * or biometric entity feed) strictly contained to the monitor screen depth using isolated raster or diorama rendering.
      * Completely eliminates 3D mesh protrusion and armor clipping when viewing the monitor from any angle.
      */
     class CameraFeed(
@@ -1190,7 +1192,7 @@ interface WindowElement : MeasurableElement {
         private val height: Float = 48f,
         private val style: VideoFeedStyle = VideoFeedStyle.SECURITY_CAMERA_CCTV,
         private val alignment: Text.TextAlignment = Text.TextAlignment.CENTER,
-        val feedId: String = "cam_${System.identityHashCode(source).toString(16)}",
+        val feedId: String? = null,
     ) : WindowElement {
         constructor(
             cameraView: CameraView,
@@ -1198,7 +1200,8 @@ interface WindowElement : MeasurableElement {
             height: Float = 48f,
             style: VideoFeedStyle = VideoFeedStyle.SECURITY_CAMERA_CCTV,
             alignment: Text.TextAlignment = Text.TextAlignment.CENTER,
-        ) : this(CameraSource.Spatial(cameraView), width, height, style, alignment)
+            feedId: String? = null,
+        ) : this(CameraSource.Spatial(cameraView), width, height, style, alignment, feedId)
 
         constructor(
             entity: LivingEntity,
@@ -1206,7 +1209,17 @@ interface WindowElement : MeasurableElement {
             height: Float = 48f,
             style: VideoFeedStyle = VideoFeedStyle.SECURITY_CAMERA_CCTV,
             alignment: Text.TextAlignment = Text.TextAlignment.CENTER,
-        ) : this(CameraSource.Entity(entity), width, height, style, alignment)
+            feedId: String? = null,
+        ) : this(CameraSource.Entity(entity), width, height, style, alignment, feedId)
+
+        constructor(
+            width: Float = 64f,
+            height: Float = 48f,
+            style: VideoFeedStyle = VideoFeedStyle.SECURITY_CAMERA_CCTV,
+            alignment: Text.TextAlignment = Text.TextAlignment.CENTER,
+            feedId: String? = null,
+            entitySupplier: () -> LivingEntity?,
+        ) : this(CameraSource.Entity(entitySupplier), width, height, style, alignment, feedId)
 
         constructor(
             width: Float = 64f,
@@ -1214,7 +1227,38 @@ interface WindowElement : MeasurableElement {
             style: VideoFeedStyle = VideoFeedStyle.SECURITY_CAMERA_CCTV,
             alignment: Text.TextAlignment = Text.TextAlignment.CENTER,
             entitySupplier: () -> LivingEntity?,
-        ) : this(CameraSource.Entity(entitySupplier), width, height, style, alignment)
+        ) : this(CameraSource.Entity(entitySupplier), width, height, style, alignment, null)
+
+        val resolvedFeedId: String = if (!feedId.isNullOrBlank()) {
+            feedId
+        } else {
+            when (source) {
+                is CameraSource.Spatial -> {
+                    val p = source.view.position
+                    "spatial_${p.x.toInt()}_${p.y.toInt()}_${p.z.toInt()}"
+                }
+                is CameraSource.Entity -> {
+                    val entity = source.entitySupplier()
+                    if (entity != null) "entity_${entity.id}" else "entity_feed"
+                }
+            }
+        }
+
+        private val dioramaSampler: ChunkDioramaSampler by lazy {
+            ChunkDioramaSampler(
+                radiusX = 3,
+                radiusZ = 3,
+                heightBelow = 2,
+                heightAbove = 3,
+                customCenter = when (source) {
+                    is CameraSource.Spatial -> BlockPos.containing(source.view.position)
+                    is CameraSource.Entity -> source.resolveView()?.let { BlockPos.containing(it.position) }
+                },
+                cullHiddenBlocks = true,
+                showEntities = true,
+                updateIntervalMs = 150L,
+            )
+        }
 
         private val safeWidth = width.coerceAtLeast(1f)
         private val safeHeight = height.coerceAtLeast(1f)
@@ -1244,26 +1288,78 @@ interface WindowElement : MeasurableElement {
                 Text.TextAlignment.RIGHT -> max(0f, availableWidth - safeWidth)
             }
 
-            val textureLocation = ScreenRenderTargetManager.getFeedTexture(feedId, source, style)
-            val renderType = if (seeThrough) RenderTypes.textBackgroundSeeThrough() else RenderTypes.textBackground()
             val time = WindowColor.currentTimeSeconds()
+            val renderType = if (seeThrough) RenderTypes.textBackgroundSeeThrough() else RenderTypes.textBackground()
 
-            // 1. Flat 2D Screen Quad at Z = 0.01f
-            collector.submitCustomGeometry(poseStack, RenderTypes.entityCutout(textureLocation)) { pose, builder ->
+            val bgZ = 0.005f
+            val sceneZ = 0.01f
+            val overlayZ = 0.02f
+            val borderZ = 0.025f
+            val hudZ = 0.03f
+
+            val bgCollector = (collector as? SubmitNodeCollector)?.order(0) ?: collector
+            val contentCollector = (collector as? SubmitNodeCollector)?.order(1) ?: collector
+            val overlayCollector = (collector as? SubmitNodeCollector)?.order(2) ?: collector
+
+            // 1. Monitor Background Screen Quad at Z = 0.005f
+            bgCollector.submitCustomGeometry(poseStack, renderType) { pose, bgBuilder ->
                 val matrix = pose.pose()
                 val r = drawX + safeWidth
                 val b = y + safeHeight
-                val zScreen = 0.01f
-
-                addTexturedVertex(builder, matrix, drawX, y, zScreen, 0f, 0f, packedLight)
-                addTexturedVertex(builder, matrix, drawX, b, zScreen, 0f, 1f, packedLight)
-                addTexturedVertex(builder, matrix, r, b, zScreen, 1f, 1f, packedLight)
-                addTexturedVertex(builder, matrix, r, y, zScreen, 1f, 0f, packedLight)
+                when (style) {
+                    VideoFeedStyle.CLEAN -> {
+                        bgBuilder.addVertex(matrix, drawX, y, bgZ).setColor(0.05f, 0.05f, 0.05f, 0.9f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, drawX, b, bgZ).setColor(0.05f, 0.05f, 0.05f, 0.9f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, r, b, bgZ).setColor(0.05f, 0.05f, 0.05f, 0.9f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, r, y, bgZ).setColor(0.05f, 0.05f, 0.05f, 0.9f).setLight(packedLight)
+                    }
+                    VideoFeedStyle.SECURITY_CAMERA_CCTV -> {
+                        bgBuilder.addVertex(matrix, drawX, y, bgZ).setColor(0.02f, 0.04f, 0.06f, 0.95f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, drawX, b, bgZ).setColor(0.02f, 0.04f, 0.06f, 0.95f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, r, b, bgZ).setColor(0.02f, 0.04f, 0.06f, 0.95f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, r, y, bgZ).setColor(0.02f, 0.04f, 0.06f, 0.95f).setLight(packedLight)
+                    }
+                    VideoFeedStyle.CRT_SCANLINES -> {
+                        bgBuilder.addVertex(matrix, drawX, y, bgZ).setColor(0.01f, 0.01f, 0.02f, 0.95f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, drawX, b, bgZ).setColor(0.01f, 0.01f, 0.02f, 0.95f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, r, b, bgZ).setColor(0.01f, 0.01f, 0.02f, 0.95f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, r, y, bgZ).setColor(0.01f, 0.01f, 0.02f, 0.95f).setLight(packedLight)
+                    }
+                    VideoFeedStyle.CYBER_GREEN_HOLOGRAM -> {
+                        bgBuilder.addVertex(matrix, drawX, y, bgZ).setColor(0.0f, 0.08f, 0.02f, 0.85f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, drawX, b, bgZ).setColor(0.0f, 0.05f, 0.01f, 0.85f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, r, b, bgZ).setColor(0.0f, 0.05f, 0.01f, 0.85f).setLight(packedLight)
+                        bgBuilder.addVertex(matrix, r, y, bgZ).setColor(0.0f, 0.08f, 0.02f, 0.85f).setLight(packedLight)
+                    }
+                }
             }
 
-            // 2. Scanlines Overlay at Z = 0.02f
+            // 2. Spatial Camera Diorama or Flat 2D Texture Feed at Z = 0.01f
+            val cameraView: CameraView? = when (source) {
+                is CameraSource.Spatial -> source.view
+                is CameraSource.Entity -> if (source.useEyePosition) source.resolveView() else null
+            }
+
+            if (cameraView != null) {
+                FloatingChunkDiorama.withDioramaLock {
+                    renderSpatialDiorama(poseStack, contentCollector, drawX, y, safeWidth, safeHeight, cameraView, packedLight)
+                }
+            } else {
+                val textureLocation = ScreenRenderTargetManager.getFeedTexture(resolvedFeedId, source, style)
+                contentCollector.submitCustomGeometry(poseStack, RenderTypes.entityCutout(textureLocation)) { pose, builder ->
+                    val matrix = pose.pose()
+                    val r = drawX + safeWidth
+                    val b = y + safeHeight
+                    addTexturedVertex(builder, matrix, drawX, y, sceneZ, 0f, 0f, packedLight)
+                    addTexturedVertex(builder, matrix, drawX, b, sceneZ, 0f, 1f, packedLight)
+                    addTexturedVertex(builder, matrix, r, b, sceneZ, 1f, 1f, packedLight)
+                    addTexturedVertex(builder, matrix, r, y, sceneZ, 1f, 0f, packedLight)
+                }
+            }
+
+            // 3. Scanlines Overlay at Z = 0.02f
             if (style != VideoFeedStyle.CLEAN) {
-                collector.submitCustomGeometry(poseStack, renderType) { pose, builder ->
+                overlayCollector.submitCustomGeometry(poseStack, renderType) { pose, builder ->
                     val matrix = pose.pose()
                     val scanColor = when (style) {
                         VideoFeedStyle.CYBER_GREEN_HOLOGRAM -> WindowColor.RGBA(0f, 1f, 0.4f, 0.12f)
@@ -1277,16 +1373,16 @@ interface WindowElement : MeasurableElement {
                     for (i in 0 until lines step 2) {
                         val sy = y + i * lineStep
                         val sh = lineStep * 0.5f
-                        builder.addVertex(matrix, drawX, sy, 0.02f).setColor(scanColor.r, scanColor.g, scanColor.b, scanColor.a).setLight(packedLight)
-                        builder.addVertex(matrix, drawX, sy + sh, 0.02f).setColor(scanColor.r, scanColor.g, scanColor.b, scanColor.a).setLight(packedLight)
-                        builder.addVertex(matrix, drawX + safeWidth, sy + sh, 0.02f).setColor(scanColor.r, scanColor.g, scanColor.b, scanColor.a).setLight(packedLight)
-                        builder.addVertex(matrix, drawX + safeWidth, sy, 0.02f).setColor(scanColor.r, scanColor.g, scanColor.b, scanColor.a).setLight(packedLight)
+                        builder.addVertex(matrix, drawX, sy, overlayZ).setColor(scanColor.r, scanColor.g, scanColor.b, scanColor.a).setLight(packedLight)
+                        builder.addVertex(matrix, drawX, sy + sh, overlayZ).setColor(scanColor.r, scanColor.g, scanColor.b, scanColor.a).setLight(packedLight)
+                        builder.addVertex(matrix, drawX + safeWidth, sy + sh, overlayZ).setColor(scanColor.r, scanColor.g, scanColor.b, scanColor.a).setLight(packedLight)
+                        builder.addVertex(matrix, drawX + safeWidth, sy, overlayZ).setColor(scanColor.r, scanColor.g, scanColor.b, scanColor.a).setLight(packedLight)
                     }
                 }
             }
 
-            // 3. Monitor Bezel Frame at Z = 0.03f
-            collector.submitCustomGeometry(poseStack, renderType) { pose, builder ->
+            // 4. Monitor Bezel Frame at Z = 0.025f
+            overlayCollector.submitCustomGeometry(poseStack, renderType) { pose, builder ->
                 val matrix = pose.pose()
                 val bw = 1.0f
                 val r = drawX + safeWidth
@@ -1299,33 +1395,32 @@ interface WindowElement : MeasurableElement {
                 }
 
                 // Top
-                builder.addVertex(matrix, drawX - bw, y - bw, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
-                builder.addVertex(matrix, drawX - bw, y, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
-                builder.addVertex(matrix, r + bw, y, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
-                builder.addVertex(matrix, r + bw, y - bw, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+                builder.addVertex(matrix, drawX - bw, y - bw, borderZ).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+                builder.addVertex(matrix, drawX - bw, y, borderZ).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+                builder.addVertex(matrix, r + bw, y, borderZ).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+                builder.addVertex(matrix, r + bw, y - bw, borderZ).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
 
                 // Bottom
-                builder.addVertex(matrix, drawX - bw, b, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
-                builder.addVertex(matrix, drawX - bw, b + bw, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
-                builder.addVertex(matrix, r + bw, b + bw, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
-                builder.addVertex(matrix, r + bw, b, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+                builder.addVertex(matrix, drawX - bw, b, borderZ).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+                builder.addVertex(matrix, drawX - bw, b + bw, borderZ).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+                builder.addVertex(matrix, r + bw, b + bw, borderZ).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+                builder.addVertex(matrix, r + bw, b, borderZ).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
 
                 // Left
-                builder.addVertex(matrix, drawX - bw, y, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
-                builder.addVertex(matrix, drawX - bw, b, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
-                builder.addVertex(matrix, drawX, b, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
-                builder.addVertex(matrix, drawX, y, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+                builder.addVertex(matrix, drawX - bw, y, borderZ).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+                builder.addVertex(matrix, drawX - bw, b, borderZ).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+                builder.addVertex(matrix, drawX, b, borderZ).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+                builder.addVertex(matrix, drawX, y, borderZ).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
 
                 // Right
-                builder.addVertex(matrix, r, y, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
-                builder.addVertex(matrix, r, b, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
-                builder.addVertex(matrix, r + bw, b, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
-                builder.addVertex(matrix, r + bw, y, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+                builder.addVertex(matrix, r, y, borderZ).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+                builder.addVertex(matrix, r, b, borderZ).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+                builder.addVertex(matrix, r + bw, b, borderZ).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+                builder.addVertex(matrix, r + bw, y, borderZ).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
             }
 
-            // 4. OSD HUD Overlays (REC blink, OSD labels) at Z = 0.035f
+            // 5. OSD HUD Overlays (REC blink, OSD labels) at Z = 0.03f
             if (style == VideoFeedStyle.SECURITY_CAMERA_CCTV || style == VideoFeedStyle.CRT_SCANLINES || style == VideoFeedStyle.CYBER_GREEN_HOLOGRAM) {
-                val font = Minecraft.getInstance().font
                 val displayMode = if (seeThrough) Font.DisplayMode.SEE_THROUGH else Font.DisplayMode.POLYGON_OFFSET
                 val osdScale = 0.5f
 
@@ -1333,9 +1428,9 @@ interface WindowElement : MeasurableElement {
                 val recBlink = (time % 1.0) < 0.6
                 if (recBlink && style == VideoFeedStyle.SECURITY_CAMERA_CCTV) {
                     poseStack.pushPose()
-                    poseStack.translate(drawX.toDouble() + 3.0, y.toDouble() + 3.0, 0.035)
+                    poseStack.translate(drawX.toDouble() + 3.0, y.toDouble() + 3.0, hudZ.toDouble())
                     poseStack.scale(osdScale, osdScale, 1f)
-                    collector.submitText(
+                    overlayCollector.submitText(
                         poseStack,
                         0f,
                         0f,
@@ -1357,14 +1452,14 @@ interface WindowElement : MeasurableElement {
                     else -> "CAM-01 [LIVE]"
                 }
                 poseStack.pushPose()
-                poseStack.translate(drawX.toDouble() + 3.0, y.toDouble() + safeHeight - 7.0, 0.035)
+                poseStack.translate(drawX.toDouble() + 3.0, y.toDouble() + safeHeight - 7.0, hudZ.toDouble())
                 poseStack.scale(osdScale, osdScale, 1f)
                 val textColor = when (style) {
                     VideoFeedStyle.CYBER_GREEN_HOLOGRAM -> 0xFF00FF66.toInt()
                     VideoFeedStyle.CRT_SCANLINES -> 0xFF38BDF8.toInt()
                     else -> 0xFF94A3B8.toInt()
                 }
-                collector.submitText(
+                overlayCollector.submitText(
                     poseStack,
                     0f,
                     0f,
@@ -1378,6 +1473,92 @@ interface WindowElement : MeasurableElement {
                 )
                 poseStack.popPose()
             }
+        }
+
+        private fun renderSpatialDiorama(
+            poseStack: PoseStack,
+            collector: OrderedSubmitNodeCollector,
+            drawX: Float,
+            y: Float,
+            safeWidth: Float,
+            safeHeight: Float,
+            view: CameraView,
+            packedLight: Int,
+        ) {
+            val camPos = BlockPos.containing(view.position)
+            dioramaSampler.customCenter = camPos
+            dioramaSampler.updateIfNeeded()
+
+            val screenCenterX = drawX.toDouble() + safeWidth / 2.0
+            val screenCenterY = y.toDouble() + safeHeight / 2.0
+            val dioramaScale = safeHeight / 6.0f
+
+            val center = dioramaSampler.cachedCenter
+            val offsetX = -(view.position.x - center.x)
+            val offsetY = -(view.position.y - center.y)
+            val offsetZ = -(view.position.z - center.z)
+
+            poseStack.pushPose()
+            poseStack.translate(screenCenterX, screenCenterY, 0.01)
+            poseStack.scale(dioramaScale, -dioramaScale, dioramaScale * 0.15f)
+            poseStack.mulPose(Axis.XP.rotationDegrees(view.pitch))
+            poseStack.mulPose(Axis.YP.rotationDegrees(180f - view.yaw))
+            poseStack.translate(offsetX, offsetY, offsetZ)
+
+            // 1. Blocks
+            val blocks = dioramaSampler.cachedBlocks
+            for (block in blocks) {
+                poseStack.pushPose()
+                poseStack.translate(block.relX.toDouble(), block.relY.toDouble(), block.relZ.toDouble())
+                try {
+                    WorldPanelBlockRenderer.render(block.state, poseStack, collector, packedLight)
+                } catch (_: Throwable) {
+                } finally {
+                    poseStack.popPose()
+                }
+            }
+
+            // 2. Entities
+            val mc = Minecraft.getInstance()
+            val dispatcher = mc.entityRenderDispatcher
+            val deltaTracker = mc.deltaTracker
+            val partialTick = deltaTracker.getGameTimeDeltaPartialTick(false)
+
+            val submitCollector: SubmitNodeCollector =
+                (collector as? SubmitNodeCollector)
+                    ?: object : SubmitNodeCollector, OrderedSubmitNodeCollector by collector {
+                        override fun order(order: Int) = collector
+                    }
+
+            val entities = dioramaSampler.getEntities()
+            for (entity in entities) {
+                val relX = entity.x - center.x
+                val relY = entity.y - center.y
+                val relZ = entity.z - center.z
+
+                poseStack.pushPose()
+                poseStack.translate(relX, relY, relZ)
+                try {
+                    val renderState = dispatcher.extractEntity(entity, partialTick)
+                    renderState.shadowPieces.clear()
+                    renderState.shadowRadius = 0f
+                    renderState.outlineColor = 0
+                    dispatcher.submit(
+                        renderState,
+                        CameraRenderState(),
+                        0.0,
+                        0.0,
+                        0.0,
+                        poseStack,
+                        submitCollector
+                    )
+                } catch (_: Throwable) {
+                } finally {
+                    poseStack.popPose()
+                }
+            }
+
+            poseStack.popPose()
         }
 
         private fun addTexturedVertex(

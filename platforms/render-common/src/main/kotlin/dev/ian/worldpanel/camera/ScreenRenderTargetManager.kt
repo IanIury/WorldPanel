@@ -20,14 +20,26 @@ import kotlin.math.sin
 object ScreenRenderTargetManager {
     const val BUFFER_WIDTH = 256
     const val BUFFER_HEIGHT = 256
+    const val MAX_BUFFERS = 16
+    const val EXPIRATION_MS = 5000L
 
     private class FeedBuffer(val location: ResourceLocation) {
         val image: NativeImage = NativeImage(BUFFER_WIDTH, BUFFER_HEIGHT, false)
         val texture: DynamicTexture = DynamicTexture(image)
         var lastUpdateMs: Long = 0L
+        var lastAccessMs: Long = System.currentTimeMillis()
 
         fun upload() {
             texture.upload()
+        }
+
+        fun destroy() {
+            try {
+                Minecraft.getInstance().textureManager.release(location)
+            } catch (_: Throwable) {}
+            try {
+                texture.close()
+            } catch (_: Throwable) {}
         }
     }
 
@@ -38,6 +50,26 @@ object ScreenRenderTargetManager {
         source: CameraSource,
         style: VideoFeedStyle,
     ): ResourceLocation {
+        val now = System.currentTimeMillis()
+
+        // 1. Evict expired buffers (unused for > 5 seconds)
+        val iterator = buffers.entries.iterator()
+        while (iterator.hasNext()) {
+            val entry = iterator.next()
+            if (entry.key != feedId && (now - entry.value.lastAccessMs) > EXPIRATION_MS) {
+                entry.value.destroy()
+                iterator.remove()
+            }
+        }
+
+        // 2. Enforce maximum buffer capacity using LRU eviction
+        if (!buffers.containsKey(feedId) && buffers.size >= MAX_BUFFERS) {
+            val oldest = buffers.minByOrNull { it.value.lastAccessMs }
+            if (oldest != null) {
+                buffers.remove(oldest.key)?.destroy()
+            }
+        }
+
         val location = ResourceLocation.fromNamespaceAndPath("worldpanel", "dynamic_feed_${feedId.lowercase()}")
         val buffer = buffers.computeIfAbsent(feedId) {
             val buf = FeedBuffer(location)
@@ -45,7 +77,8 @@ object ScreenRenderTargetManager {
             buf
         }
 
-        val now = System.currentTimeMillis()
+        buffer.lastAccessMs = now
+
         if (now - buffer.lastUpdateMs >= 50L) { // 20 updates per second
             buffer.lastUpdateMs = now
             renderFeedToImage(buffer.image, source, style, now)
@@ -73,7 +106,7 @@ object ScreenRenderTargetManager {
 
         for (y in 0 until BUFFER_HEIGHT) {
             for (x in 0 until BUFFER_WIDTH) {
-                setPixel(img, x, y, bgArgb)
+                img.setPixelRGBA(x, y, bgArgb)
             }
         }
 
@@ -129,6 +162,7 @@ object ScreenRenderTargetManager {
         val cy = BUFFER_HEIGHT / 2
 
         // Horizon line with pitch tilt
+        val pitchRad = Math.toRadians(view.pitch.toDouble())
         val pitchOffset = (view.pitch * 1.5f).toInt()
         val horizonY = (cy + pitchOffset).coerceIn(20, BUFFER_HEIGHT - 20)
 
@@ -158,7 +192,7 @@ object ScreenRenderTargetManager {
         drawLine(img, cx + 4, cy, cx + 12, cy, fgColor)
         drawLine(img, cx, cy - 12, cx, cy - 4, fgColor)
         drawLine(img, cx, cy + 4, cx, cy + 12, fgColor)
-        plotPixel(img, cx, cy, fgColor)
+        img.setPixelRGBA(cx, cy, fgColor)
 
         // Corner brackets around center
         val bSize = 32
@@ -211,6 +245,7 @@ object ScreenRenderTargetManager {
         // Silhouette / Biometric avatar wireframe
         val rotAngle = (timeSec * spinSpeed * 2.0).toFloat()
         val cosR = cos(rotAngle)
+        val sinR = sin(rotAngle)
 
         // Head circle
         val headY = cy - 40
@@ -241,7 +276,7 @@ object ScreenRenderTargetManager {
                 wavePhase in 50.0..55.0 -> -((wavePhase - 50.0) * 4.0 - 15.0).toInt()
                 else -> 0
             }
-            plotPixel(img, x, ekgY + dy, fgColor)
+            img.setPixelRGBA(x, ekgY + dy, fgColor)
         }
 
         // Entity status text
@@ -279,6 +314,7 @@ object ScreenRenderTargetManager {
             val dist = pos.distanceTo(e.position())
             if (dist < 1.0) continue
 
+            // Angle relative to camera yaw
             val dx = e.x - pos.x
             val dz = e.z - pos.z
             val targetYaw = Math.toDegrees(kotlin.math.atan2(-dx, dz)).toFloat()
@@ -307,12 +343,12 @@ object ScreenRenderTargetManager {
         // Horizontal scanlines
         for (y in 0 until BUFFER_HEIGHT step 2) {
             for (x in 0 until BUFFER_WIDTH) {
-                val p = getPixel(img, x, y)
+                val p = img.getPixelRGBA(x, y)
                 val a = (p shr 24) and 0xFF
                 val r = (((p shr 16) and 0xFF) * (1f - scanAlpha)).toInt()
                 val g = (((p shr 8) and 0xFF) * (1f - scanAlpha)).toInt()
                 val b = ((p and 0xFF) * (1f - scanAlpha)).toInt()
-                setPixel(img, x, y, (a shl 24) or (r shl 16) or (g shl 8) or b)
+                img.setPixelRGBA(x, y, (a shl 24) or (r shl 16) or (g shl 8) or b)
             }
         }
 
@@ -324,34 +360,18 @@ object ScreenRenderTargetManager {
                 val vig = (dx * dx + dy * dy) * 0.4f
                 if (vig > 0.15f) {
                     val factor = (1f - (vig - 0.15f)).coerceIn(0.2f, 1f)
-                    val p = getPixel(img, x, y)
+                    val p = img.getPixelRGBA(x, y)
                     val a = (p shr 24) and 0xFF
                     val r = (((p shr 16) and 0xFF) * factor).toInt()
                     val g = (((p shr 8) and 0xFF) * factor).toInt()
                     val b = ((p and 0xFF) * factor).toInt()
-                    setPixel(img, x, y, (a shl 24) or (r shl 16) or (g shl 8) or b)
+                    img.setPixelRGBA(x, y, (a shl 24) or (r shl 16) or (g shl 8) or b)
                 }
             }
         }
     }
 
     // --- Drawing primitives ---
-
-    private fun setPixel(img: NativeImage, x: Int, y: Int, argb: Int) {
-        val abgr = (argb and -0x1000000) or ((argb and 0xFF) shl 16) or (argb and 0x00FF00) or ((argb shr 16) and 0xFF)
-        img.setPixelRGBA(x, y, abgr)
-    }
-
-    private fun getPixel(img: NativeImage, x: Int, y: Int): Int {
-        val abgr = img.getPixelRGBA(x, y)
-        return (abgr and -0x1000000) or ((abgr and 0xFF) shl 16) or (abgr and 0x00FF00) or ((abgr shr 16) and 0xFF)
-    }
-
-    private fun plotPixel(img: NativeImage, x: Int, y: Int, color: Int) {
-        if (x in 0 until BUFFER_WIDTH && y in 0 until BUFFER_HEIGHT) {
-            setPixel(img, x, y, color)
-        }
-    }
 
     private fun drawLine(img: NativeImage, x0: Int, y0: Int, x1: Int, y1: Int, color: Int) {
         var x = x0
@@ -363,7 +383,9 @@ object ScreenRenderTargetManager {
         var err = dx - dy
 
         while (true) {
-            plotPixel(img, x, y, color)
+            if (x in 0 until BUFFER_WIDTH && y in 0 until BUFFER_HEIGHT) {
+                img.setPixelRGBA(x, y, color)
+            }
             if (x == x1 && y == y1) break
             val e2 = 2 * err
             if (e2 > -dy) {
@@ -401,13 +423,23 @@ object ScreenRenderTargetManager {
         }
     }
 
+    private fun plotPixel(img: NativeImage, x: Int, y: Int, color: Int) {
+        if (x in 0 until BUFFER_WIDTH && y in 0 until BUFFER_HEIGHT) {
+            img.setPixelRGBA(x, y, color)
+        }
+    }
+
     private fun drawCornerBrackets(img: NativeImage, x0: Int, y0: Int, x1: Int, y1: Int, len: Int, color: Int) {
+        // Top-left
         drawLine(img, x0, y0, x0 + len, y0, color)
         drawLine(img, x0, y0, x0, y0 + len, color)
+        // Top-right
         drawLine(img, x1, y0, x1 - len, y0, color)
         drawLine(img, x1, y0, x1, y0 + len, color)
+        // Bottom-left
         drawLine(img, x0, y1, x0 + len, y1, color)
         drawLine(img, x0, y1, x0, y1 - len, color)
+        // Bottom-right
         drawLine(img, x1, y1, x1 - len, y1, color)
         drawLine(img, x1, y1, x1, y1 - len, color)
     }

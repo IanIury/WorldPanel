@@ -20,14 +20,26 @@ import kotlin.math.sin
 object ScreenRenderTargetManager {
     const val BUFFER_WIDTH = 256
     const val BUFFER_HEIGHT = 256
+    const val MAX_BUFFERS = 16
+    const val EXPIRATION_MS = 5000L
 
     private class FeedBuffer(val location: Identifier) {
         val image: NativeImage = NativeImage(BUFFER_WIDTH, BUFFER_HEIGHT, false)
         val texture: DynamicTexture = DynamicTexture({ location.toString() }, image)
         var lastUpdateMs: Long = 0L
+        var lastAccessMs: Long = System.currentTimeMillis()
 
         fun upload() {
             texture.upload()
+        }
+
+        fun destroy() {
+            try {
+                Minecraft.getInstance().textureManager.release(location)
+            } catch (_: Throwable) {}
+            try {
+                texture.close()
+            } catch (_: Throwable) {}
         }
     }
 
@@ -38,6 +50,26 @@ object ScreenRenderTargetManager {
         source: CameraSource,
         style: VideoFeedStyle,
     ): Identifier {
+        val now = System.currentTimeMillis()
+
+        // 1. Evict expired buffers (unused for > 5 seconds)
+        val iterator = buffers.entries.iterator()
+        while (iterator.hasNext()) {
+            val entry = iterator.next()
+            if (entry.key != feedId && (now - entry.value.lastAccessMs) > EXPIRATION_MS) {
+                entry.value.destroy()
+                iterator.remove()
+            }
+        }
+
+        // 2. Enforce maximum buffer capacity using LRU eviction
+        if (!buffers.containsKey(feedId) && buffers.size >= MAX_BUFFERS) {
+            val oldest = buffers.minByOrNull { it.value.lastAccessMs }
+            if (oldest != null) {
+                buffers.remove(oldest.key)?.destroy()
+            }
+        }
+
         val location = Identifier.fromNamespaceAndPath("worldpanel", "dynamic_feed_${feedId.lowercase()}")
         val buffer = buffers.computeIfAbsent(feedId) {
             val buf = FeedBuffer(location)
@@ -45,7 +77,8 @@ object ScreenRenderTargetManager {
             buf
         }
 
-        val now = System.currentTimeMillis()
+        buffer.lastAccessMs = now
+
         if (now - buffer.lastUpdateMs >= 50L) { // 20 updates per second
             buffer.lastUpdateMs = now
             renderFeedToImage(buffer.image, source, style, now)

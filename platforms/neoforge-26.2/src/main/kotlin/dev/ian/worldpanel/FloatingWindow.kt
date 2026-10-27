@@ -1411,9 +1411,10 @@ class FloatingWindow private constructor(
             region: String? = null,
             position: ElementPosition? = null,
             alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
+            feedId: String? = null,
         ) = apply {
             addElementInternal(
-                WindowElement.CameraFeed(cameraSource, width, height, style, alignment),
+                WindowElement.CameraFeed(cameraSource, width, height, style, alignment, feedId),
                 position = position,
                 region = region
             )
@@ -1427,7 +1428,8 @@ class FloatingWindow private constructor(
             region: String? = null,
             position: ElementPosition? = null,
             alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
-        ) = addCameraFeed(CameraSource.Spatial(cameraView), width, height, style, region, position, alignment)
+            feedId: String? = null,
+        ) = addCameraFeed(CameraSource.Spatial(cameraView), width, height, style, region, position, alignment, feedId)
 
         fun addCameraFeed(
             entity: LivingEntity,
@@ -1437,7 +1439,8 @@ class FloatingWindow private constructor(
             region: String? = null,
             position: ElementPosition? = null,
             alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
-        ) = addCameraFeed(CameraSource.Entity(entity), width, height, style, region, position, alignment)
+            feedId: String? = null,
+        ) = addCameraFeed(CameraSource.Entity(entity), width, height, style, region, position, alignment, feedId)
 
         fun addCameraFeed(
             width: Float = 64f,
@@ -1446,8 +1449,9 @@ class FloatingWindow private constructor(
             region: String? = null,
             position: ElementPosition? = null,
             alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
+            feedId: String? = null,
             entitySupplier: () -> LivingEntity?,
-        ) = addCameraFeed(CameraSource.Entity(entitySupplier), width, height, style, region, position, alignment)
+        ) = addCameraFeed(CameraSource.Entity(entitySupplier), width, height, style, region, position, alignment, feedId)
 
         fun addFlatCameraFeed(
             cameraSource: CameraSource,
@@ -1457,7 +1461,8 @@ class FloatingWindow private constructor(
             region: String? = null,
             position: ElementPosition? = null,
             alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
-        ) = addCameraFeed(cameraSource, width, height, style, region, position, alignment)
+            feedId: String? = null,
+        ) = addCameraFeed(cameraSource, width, height, style, region, position, alignment, feedId)
 
         fun addFlatCameraFeed(
             cameraView: CameraView,
@@ -1467,7 +1472,8 @@ class FloatingWindow private constructor(
             region: String? = null,
             position: ElementPosition? = null,
             alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
-        ) = addCameraFeed(CameraSource.Spatial(cameraView), width, height, style, region, position, alignment)
+            feedId: String? = null,
+        ) = addCameraFeed(CameraSource.Spatial(cameraView), width, height, style, region, position, alignment, feedId)
 
         fun addFlatCameraFeed(
             entity: LivingEntity,
@@ -1477,7 +1483,8 @@ class FloatingWindow private constructor(
             region: String? = null,
             position: ElementPosition? = null,
             alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
-        ) = addCameraFeed(CameraSource.Entity(entity), width, height, style, region, position, alignment)
+            feedId: String? = null,
+        ) = addCameraFeed(CameraSource.Entity(entity), width, height, style, region, position, alignment, feedId)
 
         fun addFlatCameraFeed(
             width: Float = 64f,
@@ -1486,8 +1493,9 @@ class FloatingWindow private constructor(
             region: String? = null,
             position: ElementPosition? = null,
             alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
+            feedId: String? = null,
             entitySupplier: () -> LivingEntity?,
-        ) = addCameraFeed(CameraSource.Entity(entitySupplier), width, height, style, region, position, alignment)
+        ) = addCameraFeed(CameraSource.Entity(entitySupplier), width, height, style, region, position, alignment, feedId)
 
         fun addHoloMap(
             radiusChunks: Int = 1,

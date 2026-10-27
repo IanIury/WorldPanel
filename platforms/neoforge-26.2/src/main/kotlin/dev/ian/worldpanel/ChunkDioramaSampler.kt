@@ -17,7 +17,7 @@ class ChunkDioramaSampler(
     val radiusZ: Int = 4,
     val heightBelow: Int = 3,
     val heightAbove: Int = 5,
-    val customCenter: BlockPos? = null,
+    var customCenter: BlockPos? = null,
     val cullHiddenBlocks: Boolean = true,
     val showEntities: Boolean = true,
     val updateIntervalMs: Long = 250L,
@@ -39,18 +39,18 @@ class ChunkDioramaSampler(
 
     fun getCenter(): BlockPos {
         val mc = Minecraft.getInstance()
-        if (customCenter != null) return customCenter
+        if (customCenter != null) return customCenter!!
         return mc.player?.blockPosition() ?: BlockPos.ZERO
     }
 
     fun updateIfNeeded() {
         val now = System.currentTimeMillis()
-        if (now - lastSampleTime < updateIntervalMs && cachedBlocks.isNotEmpty()) return
+        val center = getCenter()
+        if (now - lastSampleTime < updateIntervalMs && cachedBlocks.isNotEmpty() && cachedCenter == center) return
         lastSampleTime = now
 
         val mc = Minecraft.getInstance()
         val level = mc.level ?: return
-        val center = getCenter()
         cachedCenter = center
 
         val minX = center.x - radiusX
