@@ -67,6 +67,12 @@ class FloatingVolumetricText private constructor(
         val halfH = font.lineHeight / 2f
         poseStack.translate(-halfW.toDouble(), -halfH.toDouble(), 0.0)
 
+        // Determine whether camera is facing the front (+Z) or back (-Z) of the text plane
+        val currentMatrix = poseStack.last().pose()
+        val centerCam = Vector3f(halfW, halfH, 0f).mulPosition(currentMatrix)
+        val normalCam = Vector3f(0f, 0f, 1f).mulDirection(currentMatrix)
+        val isFrontFacing = (normalCam.x * (-centerCam.x) + normalCam.y * (-centerCam.y) + normalCam.z * (-centerCam.z)) >= 0f
+
         // 1. Calculate directional light vector in font coordinate space (where Y points down)
         val lightRad = Math.toRadians(lightAngleDegrees.toDouble())
         val lightDir = Vector3f(cos(lightRad).toFloat(), -sin(lightRad).toFloat(), 0.6f).normalize()
@@ -80,24 +86,26 @@ class FloatingVolumetricText private constructor(
         val displayMode = if (seeThrough) Font.DisplayMode.SEE_THROUGH else Font.DisplayMode.POLYGON_OFFSET
         val zEpsilon = 0.002f // Epsilon offset to eliminate Z-fighting with extrusion wall edges
 
-        // 3. Front Face (+halfT + zEpsilon)
-        poseStack.pushPose()
-        poseStack.translate(0.0, 0.0, (halfT + zEpsilon).toDouble())
-        drawFrontFace(poseStack, font, collector, displayMode, effectiveLight, brightness = 1.0f, timeSeconds = timeSeconds)
-        poseStack.popPose()
-
-        // 4. Back Face (-halfT - zEpsilon, rendered per-glyph to prevent reverse character order and aligned to pixel width)
-        val backBrightness = 1.0f - sideDarkening * 0.4f
-        drawBackFace(
-            poseStack = poseStack,
-            font = font,
-            collector = collector,
-            displayMode = displayMode,
-            packedLight = effectiveLight,
-            brightness = backBrightness,
-            zOffset = (-halfT - zEpsilon).toDouble(),
-            timeSeconds = timeSeconds,
-        )
+        if (isFrontFacing) {
+            // 3. Front Face (+halfT + zEpsilon) - Only drawn when camera is on the front side
+            poseStack.pushPose()
+            poseStack.translate(0.0, 0.0, (halfT + zEpsilon).toDouble())
+            drawFrontFace(poseStack, font, collector, displayMode, effectiveLight, brightness = 1.0f, timeSeconds = timeSeconds)
+            poseStack.popPose()
+        } else {
+            // 4. Back Face (-halfT - zEpsilon) - Only drawn when camera is on the back side
+            val backBrightness = 1.0f - sideDarkening * 0.4f
+            drawBackFace(
+                poseStack = poseStack,
+                font = font,
+                collector = collector,
+                displayMode = displayMode,
+                packedLight = effectiveLight,
+                brightness = backBrightness,
+                zOffset = (-halfT - zEpsilon).toDouble(),
+                timeSeconds = timeSeconds,
+            )
+        }
 
         poseStack.popPose()
     }
@@ -251,12 +259,14 @@ class FloatingVolumetricText private constructor(
                             val normal = Vector3f(seg.normalX, seg.normalY, 0f)
                             val shading = computeShading(normal, lightDir)
 
+                            // Quad vertices wound CCW in world space (accounting for -safeScale on Y axis)
+                            // so that exterior faces point outward and interior faces are culled
                             addQuad(
                                 builder, matrix,
                                 x0, y0, zFront,
-                                x0, y0, zBack,
-                                x1, y1, zBack,
                                 x1, y1, zFront,
+                                x1, y1, zBack,
+                                x0, y0, zBack,
                                 c, shading, packedLight
                             )
                         }

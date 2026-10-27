@@ -11,15 +11,14 @@ import net.minecraft.world.level.block.state.BlockState
 
 /** 26.2 renders blocks via BlockModelResolver and BlockModelRenderState with SubmitNodeCollector. */
 internal object WorldPanelBlockRenderer {
-    private val renderState = BlockModelRenderState()
-    private val displayContext = BlockDisplayContext.create()
-
     fun render(
         state: BlockState,
         poseStack: PoseStack,
         collector: OrderedSubmitNodeCollector,
         packedLight: Int,
     ) {
+        val renderState = BlockModelRenderState()
+        val displayContext = BlockDisplayContext.create()
         val mc = Minecraft.getInstance()
         mc.blockModelResolver.update(renderState, state, displayContext)
         val submitCollector = if (collector is SubmitNodeCollector) {

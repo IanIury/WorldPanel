@@ -9,10 +9,8 @@ import net.minecraft.client.renderer.texture.OverlayTexture
 import net.minecraft.world.item.ItemDisplayContext
 import net.minecraft.world.item.ItemStack
 
-/** 26.2 uses ItemModelResolver and a reusable ItemStackRenderState with SubmitNodeCollector. */
+/** 26.2 uses ItemModelResolver and an isolated ItemStackRenderState per item with SubmitNodeCollector. */
 internal object WorldPanelItemRenderer {
-    private val renderState = ItemStackRenderState()
-
     fun render(
         stack: ItemStack,
         iconSize: Float,
@@ -22,6 +20,7 @@ internal object WorldPanelItemRenderer {
         y: Float,
         packedLight: Int,
     ) {
+        val renderState = ItemStackRenderState()
         val minecraft = Minecraft.getInstance()
         minecraft.itemModelResolver.updateForTopItem(
             renderState,
