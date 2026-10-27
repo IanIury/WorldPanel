@@ -530,11 +530,12 @@ val architecturalWindow = FloatingWindow.builder()
 O WorldPanel oferece tanto letreiros minimalistas sem janela (`FloatingText`) quanto texto com **geometria 3D volumétrica real** (`FloatingVolumetricText`):
 
 ### 1. Texto Volumétrico 3D Extrudado Real (`FloatingVolumetricText`)
-Diferente de camadas 2D transladadas, o `FloatingVolumetricText` constrói **geometria 3D real** para as letras:
-- **Paredes Laterais Extrudadas (Extrusion Walls):** Faixas conectando a face frontal à traseira com espessura configurável.
-- **Sombreamento Direcional & Normais:** Paredes laterais com sombreamento em tempo real baseado no ângulo da luz (`sideDarkening`, `lightAngleDegrees`).
-- **Chanfro / Bevel 3D:** Chanfro angular nas bordas frontais com reflexo especular metálico.
-- **Rotação Livre nos 3 Eixos:** Gira no espaço com `animateSpin` ou `animateTumble`.
+Diferente de camadas 2D transladadas ou caixas delimitadoras artificiais, o `FloatingVolumetricText` constrói **geometria 3D extrudada real** para cada caractere:
+- **Contornos Tipográficos Reais:** Extrusão dos contornos individuais de cada letra, preservando vazios internos (em letras como `O`, `A`, `B`, `D`, `P`, `R` e dígitos `0`, `4`, `6`, `8`, `9`), curvas e concavidades (como em `W`, `M`, `V`), sem superfícies contínuas indevidas no topo ou no fundo.
+- **Vazios e Recortes Preservados:** Os espaços internos e vãos entre letras permanecem abertos, permitindo enxergar através do volume tridimensional.
+- **Faces Traseiras Alinhadas:** Face posterior de cada glifo invertida e alinhada pixel a pixel com a face frontal na profundidade física configurada (`setThickness`).
+- **Sombreamento Direcional com Normais Exatas:** Paredes e facetas laterais calculam iluminação direcional física baseada nas normais de cada segmento e no ângulo de luz (`sideDarkening`, `lightAngleDegrees`).
+- **Rotação Livre nos 3 Eixos:** Gira no espaço com `animateSpin` ou `animateTumble` sem distorção geométrica.
 
 ```kotlin
 val volumetricSign = FloatingVolumetricText.builder()

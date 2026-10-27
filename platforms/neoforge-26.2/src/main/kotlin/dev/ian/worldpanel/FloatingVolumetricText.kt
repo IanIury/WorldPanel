@@ -67,11 +67,11 @@ class FloatingVolumetricText private constructor(
         val halfH = font.lineHeight / 2f
         poseStack.translate(-halfW.toDouble(), -halfH.toDouble(), 0.0)
 
-        // 1. Calculate directional light vector
+        // 1. Calculate directional light vector in font coordinate space (where Y points down)
         val lightRad = Math.toRadians(lightAngleDegrees.toDouble())
-        val lightDir = Vector3f(cos(lightRad).toFloat(), sin(lightRad).toFloat(), 0.6f).normalize()
+        val lightDir = Vector3f(cos(lightRad).toFloat(), -sin(lightRad).toFloat(), 0.6f).normalize()
 
-        // 2. Extrusion Side Walls
+        // 2. Extrusion Side Walls following true glyph geometric contours
         val wallRenderType = if (seeThrough) RenderTypes.textBackgroundSeeThrough() else RenderTypes.textBackground()
         collector.submitCustomGeometry(poseStack, wallRenderType) { pose, wallBuilder ->
             renderExtrusionWalls(wallBuilder, pose.pose(), font, halfT, lightDir, effectiveLight, timeSeconds)
@@ -86,7 +86,7 @@ class FloatingVolumetricText private constructor(
         drawFrontFace(poseStack, font, collector, displayMode, effectiveLight, brightness = 1.0f, timeSeconds = timeSeconds)
         poseStack.popPose()
 
-        // 4. Back Face (-halfT - zEpsilon, rendered per-glyph to prevent reverse character order)
+        // 4. Back Face (-halfT - zEpsilon, rendered per-glyph to prevent reverse character order and aligned to pixel width)
         val backBrightness = 1.0f - sideDarkening * 0.4f
         drawBackFace(
             poseStack = poseStack,
@@ -175,16 +175,21 @@ class FloatingVolumetricText private constructor(
             FormattedText.StyledContentConsumer<Unit> { style, fragment ->
                 val codePoints = fragment.codePoints().iterator()
                 while (codePoints.hasNext()) {
-                    val glyph = String(Character.toChars(codePoints.nextInt()))
+                    val codePoint = codePoints.nextInt()
+                    val glyph = String(Character.toChars(codePoint))
                     val glyphComp = Component.literal(glyph).setStyle(style)
                     val gw = font.width(glyphComp).toFloat()
+                    val ch = if (glyph.isNotEmpty()) glyph[0] else ' '
+
                     if (!glyph.isBlank() && gw > 0f) {
-                        val u = currentX / fullWidth
-                        val base = color.resolve(u, 0.5f, timeSeconds)
+                        val geometry = GlyphContourExtractor.getGeometry(ch)
+                        val alignWidth = if (geometry.pixelWidth > 0) geometry.pixelWidth.toFloat() else gw
+                        val u = (currentX + alignWidth / 2f) / fullWidth
+                        val base = color.resolve(u.coerceIn(0f, 1f), 0.5f, timeSeconds)
                         val shaded = WindowColor.RGBA(base.r * brightness, base.g * brightness, base.b * brightness, base.a)
 
                         poseStack.pushPose()
-                        poseStack.translate((currentX + gw).toDouble(), 0.0, zOffset)
+                        poseStack.translate((currentX + alignWidth).toDouble(), 0.0, zOffset)
                         poseStack.mulPose(Axis.YP.rotationDegrees(180f))
                         collector.submitText(
                             poseStack,
@@ -217,10 +222,8 @@ class FloatingVolumetricText private constructor(
         packedLight: Int,
         timeSeconds: Double,
     ) {
-        val lh = font.lineHeight.toFloat()
         var currentX = 0f
         val fullWidth = font.width(component).toFloat().coerceAtLeast(1f)
-
         val zFront = halfT
         val zBack = -halfT
 
@@ -228,31 +231,35 @@ class FloatingVolumetricText private constructor(
             FormattedText.StyledContentConsumer<Unit> { _, fragment ->
                 val codePoints = fragment.codePoints().iterator()
                 while (codePoints.hasNext()) {
-                    val glyph = String(Character.toChars(codePoints.nextInt()))
+                    val codePoint = codePoints.nextInt()
+                    val glyph = String(Character.toChars(codePoint))
                     val gw = font.width(glyph).toFloat()
+                    val ch = if (glyph.isNotEmpty()) glyph[0] else ' '
+
                     if (!glyph.isBlank() && gw > 0f) {
-                        val x0 = currentX
-                        val x1 = currentX + gw
-                        val y0 = 0f
-                        val y1 = lh
-                        val u = currentX / fullWidth
-                        val c = color.resolve(u, 0.5f, timeSeconds)
+                        val geometry = GlyphContourExtractor.getGeometry(ch)
 
-                        // Top wall (Normal: 0, 1, 0)
-                        val topShading = computeShading(Vector3f(0f, 1f, 0f), lightDir)
-                        addQuad(builder, matrix, x0, y0, zBack, x0, y0, zFront, x1, y0, zFront, x1, y0, zBack, c, topShading, packedLight)
+                        for (seg in geometry.segments) {
+                            val x0 = currentX + seg.x0
+                            val y0 = seg.y0
+                            val x1 = currentX + seg.x1
+                            val y1 = seg.y1
 
-                        // Bottom wall (Normal: 0, -1, 0)
-                        val botShading = computeShading(Vector3f(0f, -1f, 0f), lightDir)
-                        addQuad(builder, matrix, x0, y1, zFront, x0, y1, zBack, x1, y1, zBack, x1, y1, zFront, c, botShading, packedLight)
+                            val u = ((x0 + x1) / 2f) / fullWidth
+                            val c = color.resolve(u.coerceIn(0f, 1f), 0.5f, timeSeconds)
 
-                        // Left wall (Normal: -1, 0, 0)
-                        val leftShading = computeShading(Vector3f(-1f, 0f, 0f), lightDir)
-                        addQuad(builder, matrix, x0, y0, zFront, x0, y1, zFront, x0, y1, zBack, x0, y0, zBack, c, leftShading, packedLight)
+                            val normal = Vector3f(seg.normalX, seg.normalY, 0f)
+                            val shading = computeShading(normal, lightDir)
 
-                        // Right wall (Normal: 1, 0, 0)
-                        val rightShading = computeShading(Vector3f(1f, 0f, 0f), lightDir)
-                        addQuad(builder, matrix, x1, y0, zBack, x1, y1, zBack, x1, y1, zFront, x1, y0, zFront, c, rightShading, packedLight)
+                            addQuad(
+                                builder, matrix,
+                                x0, y0, zFront,
+                                x0, y0, zBack,
+                                x1, y1, zBack,
+                                x1, y1, zFront,
+                                c, shading, packedLight
+                            )
+                        }
                     }
                     currentX += gw
                 }
