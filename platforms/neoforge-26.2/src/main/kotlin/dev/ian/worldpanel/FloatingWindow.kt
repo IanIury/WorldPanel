@@ -1366,6 +1366,142 @@ class FloatingWindow private constructor(
             )
         }
 
+        fun addEntityVideoFeed(
+            entity: LivingEntity,
+            width: Float = 48f,
+            height: Float = 48f,
+            style: VideoFeedStyle = VideoFeedStyle.CLEAN,
+            spinSpeed: Float = 0f,
+            alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
+            region: String? = null,
+            position: ElementPosition? = null,
+        ) = apply {
+            addElementInternal(
+                WindowElement.EntityVideoFeed(entity, width, height, style, spinSpeed, alignment),
+                position = position,
+                region = region
+            )
+        }
+
+        fun addEntityVideoFeed(
+            width: Float = 48f,
+            height: Float = 48f,
+            style: VideoFeedStyle = VideoFeedStyle.CLEAN,
+            spinSpeed: Float = 0f,
+            alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
+            region: String? = null,
+            position: ElementPosition? = null,
+            entitySupplier: () -> LivingEntity?,
+        ) = apply {
+            addElementInternal(
+                WindowElement.EntityVideoFeed(entitySupplier, width, height, style, spinSpeed, alignment),
+                position = position,
+                region = region
+            )
+        }
+
+        fun addHoloMap(
+            radiusChunks: Int = 1,
+            forwardOffsetChunks: Int = 0,
+            width: Float = 64f,
+            height: Float = 48f,
+            hologramColor: WindowColor = WindowColor.Solid(0xFF00F0FFL),
+            showEntityBlips: Boolean = true,
+            wireframeHologram: Boolean = true,
+            spinSpeedY: Float = 0.4f,
+            tiltPitch: Float = 25f,
+            stepBlocks: Int = 2,
+            alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
+            region: String? = null,
+            position: ElementPosition? = null,
+        ) = apply {
+            addElementInternal(
+                WindowElement.HolographicRegionMap(
+                    radiusChunks = radiusChunks,
+                    forwardOffsetChunks = forwardOffsetChunks,
+                    width = width,
+                    height = height,
+                    hologramColor = hologramColor,
+                    showEntityBlips = showEntityBlips,
+                    wireframeHologram = wireframeHologram,
+                    spinSpeedY = spinSpeedY,
+                    tiltPitch = tiltPitch,
+                    stepBlocks = stepBlocks,
+                    alignment = alignment
+                ),
+                position = position,
+                region = region
+            )
+        }
+
+        fun addHolographicRegionMap(
+            radiusChunks: Int = 1,
+            forwardOffsetChunks: Int = 0,
+            width: Float = 64f,
+            height: Float = 48f,
+            hologramColor: WindowColor = WindowColor.Solid(0xFF00F0FFL),
+            showEntityBlips: Boolean = true,
+            wireframeHologram: Boolean = true,
+            spinSpeedY: Float = 0.4f,
+            tiltPitch: Float = 25f,
+            stepBlocks: Int = 2,
+            alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
+            region: String? = null,
+            position: ElementPosition? = null,
+        ) = addHoloMap(
+            radiusChunks,
+            forwardOffsetChunks,
+            width,
+            height,
+            hologramColor,
+            showEntityBlips,
+            wireframeHologram,
+            spinSpeedY,
+            tiltPitch,
+            stepBlocks,
+            alignment,
+            region,
+            position
+        )
+
+        fun addChunkDiorama(
+            radiusX: Int = 3,
+            radiusZ: Int = 3,
+            heightBelow: Int = 2,
+            heightAbove: Int = 3,
+            customCenter: net.minecraft.core.BlockPos? = null,
+            width: Float = 64f,
+            height: Float = 48f,
+            renderEntities: Boolean = true,
+            cullHiddenBlocks: Boolean = true,
+            spinSpeedY: Float = 0.3f,
+            tiltPitch: Float = 22f,
+            updateIntervalMs: Long = 250L,
+            alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
+            region: String? = null,
+            position: ElementPosition? = null,
+        ) = apply {
+            addElementInternal(
+                WindowElement.ChunkDiorama(
+                    radiusX = radiusX,
+                    radiusZ = radiusZ,
+                    heightBelow = heightBelow,
+                    heightAbove = heightAbove,
+                    customCenter = customCenter,
+                    width = width,
+                    height = height,
+                    renderEntities = renderEntities,
+                    cullHiddenBlocks = cullHiddenBlocks,
+                    spinSpeedY = spinSpeedY,
+                    tiltPitch = tiltPitch,
+                    updateIntervalMs = updateIntervalMs,
+                    alignment = alignment
+                ),
+                position = position,
+                region = region
+            )
+        }
+
         /** Ignores ambient block and sky light, rendering the panel at 100% full brightness. */
         fun setFullBright(enabled: Boolean = true) = apply { this.fullBright = enabled }
 

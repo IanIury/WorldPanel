@@ -3,13 +3,7 @@ package dev.ian.worldpanel
 import com.mojang.blaze3d.vertex.PoseStack
 import com.mojang.math.Axis
 import dev.ian.worldpanel.shape.PanelShape
-import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.SubmitNodeCollector
-import org.joml.Matrix4f
-import org.joml.Vector3f
-import kotlin.math.cos
-import kotlin.math.sin
-import kotlin.math.sqrt
 
 /**
  * A composite 3D regular prism (such as a hexagonal, octagonal, or triangular prism)
@@ -80,14 +74,6 @@ class FloatingPrism private constructor(
         }
         lastTimeSeconds = timeSeconds
 
-        val camera = Minecraft.getInstance().gameRenderer.mainCamera()
-        val cameraPos = camera.position()
-
-        val rotMatrix = Matrix4f()
-            .rotateY(Math.toRadians(rotYaw.toDouble()).toFloat())
-            .rotateX(Math.toRadians(rotPitch.toDouble()).toFloat())
-            .rotateZ(Math.toRadians(rotRoll.toDouble()).toFloat())
-
         poseStack.pushPose()
         poseStack.translate(offsetX, offsetY, offsetZ)
 
@@ -97,84 +83,31 @@ class FloatingPrism private constructor(
 
         val sideLengthBlocks = (faceWidth * scale).toDouble()
         val apothem = Math3DUtils.regularPolygonApothem(sideLengthBlocks, sides)
-        val halfHeightBlocks = (faceHeight * scale) / 2.0
+        val heightBlocks = (faceHeight * scale).toDouble()
 
         for ((index, window) in sideFaces) {
             val angle = index * (360f / sides)
-            val angleRad = Math.toRadians(angle.toDouble())
-            val localNormX = sin(angleRad).toFloat()
-            val localNormZ = cos(angleRad).toFloat()
-
-            val normal = Vector3f(localNormX, 0f, localNormZ)
-            rotMatrix.transformDirection(normal)
-
-            val faceCenterX = offsetX + normal.x * apothem
-            val faceCenterY = offsetY + normal.y * apothem
-            val faceCenterZ = offsetZ + normal.z * apothem
-
-            val toCamX = cameraPos.x - faceCenterX
-            val toCamY = cameraPos.y - faceCenterY
-            val toCamZ = cameraPos.z - faceCenterZ
-            val dist = sqrt(toCamX * toCamX + toCamY * toCamY + toCamZ * toCamZ)
-
-            if (dist > 0.0001 && !window.seeThrough && !window.renderBackFace) {
-                val dot = (normal.x * toCamX + normal.y * toCamY + normal.z * toCamZ) / dist
-                if (dot <= 0.0) {
-                    continue
-                }
-            }
-
             poseStack.pushPose()
             poseStack.mulPose(Axis.YP.rotationDegrees(angle))
-            poseStack.translate(0.0, 0.0, apothem)
+            poseStack.translate(0.0, heightBlocks / 2.0, apothem)
             window.render(poseStack, collector, packedLight)
             poseStack.popPose()
         }
 
         if (topFace != null) {
-            val normal = Vector3f(0f, 1f, 0f)
-            rotMatrix.transformDirection(normal)
-            val faceCenterX = offsetX + normal.x * halfHeightBlocks
-            val faceCenterY = offsetY + normal.y * halfHeightBlocks
-            val faceCenterZ = offsetZ + normal.z * halfHeightBlocks
-            val toCamX = cameraPos.x - faceCenterX
-            val toCamY = cameraPos.y - faceCenterY
-            val toCamZ = cameraPos.z - faceCenterZ
-            val dist = sqrt(toCamX * toCamX + toCamY * toCamY + toCamZ * toCamZ)
-
-            val cullTop = dist > 0.0001 && !topFace.seeThrough && !topFace.renderBackFace &&
-                ((normal.x * toCamX + normal.y * toCamY + normal.z * toCamZ) / dist <= 0.0)
-
-            if (!cullTop) {
-                poseStack.pushPose()
-                poseStack.mulPose(Axis.XP.rotationDegrees(-90f))
-                poseStack.translate(0.0, 0.0, halfHeightBlocks)
-                topFace.render(poseStack, collector, packedLight)
-                poseStack.popPose()
-            }
+            poseStack.pushPose()
+            poseStack.translate(0.0, heightBlocks, 0.0)
+            poseStack.mulPose(Axis.XP.rotationDegrees(-90f))
+            topFace.render(poseStack, collector, packedLight)
+            poseStack.popPose()
         }
 
         if (bottomFace != null) {
-            val normal = Vector3f(0f, -1f, 0f)
-            rotMatrix.transformDirection(normal)
-            val faceCenterX = offsetX + normal.x * halfHeightBlocks
-            val faceCenterY = offsetY + normal.y * halfHeightBlocks
-            val faceCenterZ = offsetZ + normal.z * halfHeightBlocks
-            val toCamX = cameraPos.x - faceCenterX
-            val toCamY = cameraPos.y - faceCenterY
-            val toCamZ = cameraPos.z - faceCenterZ
-            val dist = sqrt(toCamX * toCamX + toCamY * toCamY + toCamZ * toCamZ)
-
-            val cullBottom = dist > 0.0001 && !bottomFace.seeThrough && !bottomFace.renderBackFace &&
-                ((normal.x * toCamX + normal.y * toCamY + normal.z * toCamZ) / dist <= 0.0)
-
-            if (!cullBottom) {
-                poseStack.pushPose()
-                poseStack.mulPose(Axis.XP.rotationDegrees(90f))
-                poseStack.translate(0.0, 0.0, halfHeightBlocks)
-                bottomFace.render(poseStack, collector, packedLight)
-                poseStack.popPose()
-            }
+            poseStack.pushPose()
+            poseStack.translate(0.0, 0.0, 0.0)
+            poseStack.mulPose(Axis.XP.rotationDegrees(90f))
+            bottomFace.render(poseStack, collector, packedLight)
+            poseStack.popPose()
         }
 
         poseStack.popPose()
@@ -236,6 +169,22 @@ class FloatingPrism private constructor(
 
         fun clearTargetSide() = apply { this.targetSide = null }
 
+        fun configureFace(face: PrismFace, config: (FloatingWindow.Builder) -> Unit) = apply {
+            when (face) {
+                is PrismFace.Side -> configureSide(face.index, config)
+                is PrismFace.CapTop -> configureTop(config)
+                is PrismFace.CapBottom -> configureBottom(config)
+            }
+        }
+
+        fun setFace(face: PrismFace, window: FloatingWindow) = apply {
+            when (face) {
+                is PrismFace.Side -> setSide(face.index, window)
+                is PrismFace.CapTop -> setTop(window)
+                is PrismFace.CapBottom -> setBottom(window)
+            }
+        }
+
         fun configureSide(index: Int, config: (FloatingWindow.Builder) -> Unit) = apply {
             sideBuilders[index] = config
         }
@@ -267,6 +216,7 @@ class FloatingPrism private constructor(
                     .setAlignment(WindowAlignment.CENTER)
                     .setScale(scale)
                     .setFaceCamera(false)
+                    .setRenderBackFace(false)
                     .setOffset(0.0, 0.0, 0.0)
                     .setOffsetRelativeToOrientation(true)
                 config(b)
@@ -282,6 +232,7 @@ class FloatingPrism private constructor(
                     .setAlignment(WindowAlignment.CENTER)
                     .setScale(scale)
                     .setFaceCamera(false)
+                    .setRenderBackFace(false)
                     .setOffset(0.0, 0.0, 0.0)
                     .setOffsetRelativeToOrientation(true)
                 topBuilder!!(b)
@@ -295,6 +246,7 @@ class FloatingPrism private constructor(
                     .setAlignment(WindowAlignment.CENTER)
                     .setScale(scale)
                     .setFaceCamera(false)
+                    .setRenderBackFace(false)
                     .setOffset(0.0, 0.0, 0.0)
                     .setOffsetRelativeToOrientation(true)
                 bottomBuilder!!(b)

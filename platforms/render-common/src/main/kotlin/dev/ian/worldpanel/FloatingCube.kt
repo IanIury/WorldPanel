@@ -74,14 +74,7 @@ class FloatingCube private constructor(
         }
         lastTimeSeconds = timeSeconds
 
-        val camera = Minecraft.getInstance().gameRenderer.mainCamera
-        val cameraPos = camera.position
         val halfBlocks = (size * scale) / 2.0
-
-        val rotMatrix = Matrix4f()
-            .rotateY(Math.toRadians(rotYaw.toDouble()).toFloat())
-            .rotateX(Math.toRadians(rotPitch.toDouble()).toFloat())
-            .rotateZ(Math.toRadians(rotRoll.toDouble()).toFloat())
 
         poseStack.pushPose()
         poseStack.translate(offsetX, offsetY, offsetZ)
@@ -91,28 +84,6 @@ class FloatingCube private constructor(
         if (rotRoll != 0f) poseStack.mulPose(Axis.ZP.rotationDegrees(rotRoll))
 
         for ((face, window) in faces) {
-            // Intelligent dot-product backface culling:
-            // Calculate transformed outward normal in world coordinates
-            val normal = Vector3f(face.normalX, face.normalY, face.normalZ)
-            rotMatrix.transformDirection(normal)
-
-            val faceCenterX = offsetX + normal.x * halfBlocks
-            val faceCenterY = offsetY + normal.y * halfBlocks
-            val faceCenterZ = offsetZ + normal.z * halfBlocks
-
-            val toCamX = cameraPos.x - faceCenterX
-            val toCamY = cameraPos.y - faceCenterY
-            val toCamZ = cameraPos.z - faceCenterZ
-            val dist = sqrt(toCamX * toCamX + toCamY * toCamY + toCamZ * toCamZ)
-
-            if (dist > 0.0001 && !window.seeThrough && !window.renderBackFace) {
-                val dot = (normal.x * toCamX + normal.y * toCamY + normal.z * toCamZ) / dist
-                if (dot <= 0.0) {
-                    // Face is facing away from the camera, skip rendering for massive FPS savings
-                    continue
-                }
-            }
-
             poseStack.pushPose()
             when (face) {
                 CubeFace.FRONT -> {
@@ -131,11 +102,11 @@ class FloatingCube private constructor(
                     poseStack.translate(0.0, 0.0, halfBlocks)
                 }
                 CubeFace.TOP -> {
-                    poseStack.mulPose(Axis.XP.rotationDegrees(-90f))
+                    poseStack.mulPose(Axis.XP.rotationDegrees(90f))
                     poseStack.translate(0.0, 0.0, halfBlocks)
                 }
                 CubeFace.BOTTOM -> {
-                    poseStack.mulPose(Axis.XP.rotationDegrees(90f))
+                    poseStack.mulPose(Axis.XP.rotationDegrees(-90f))
                     poseStack.translate(0.0, 0.0, halfBlocks)
                 }
             }
@@ -212,6 +183,7 @@ class FloatingCube private constructor(
                     .setAlignment(WindowAlignment.CENTER)
                     .setScale(scale)
                     .setFaceCamera(false)
+                    .setRenderBackFace(false)
                     .setOffset(0.0, 0.0, 0.0)
                     .setOffsetRelativeToOrientation(true)
                 config(b)

@@ -328,9 +328,230 @@ val carousel = FloatingCarousel.builder()
 carousel.nextPanel()
 ```
 
+### 4. Pirâmide Regular 3D & Tetraedro (`FloatingPyramid`)
+Suporte a base quadrada (`PyramidBase.SQUARE`) ou triangular (`PyramidBase.TRIANGLE`), calculando automaticamente os ângulos diedros (`dihedral angle`) e posicionando o conteúdo perfeitamente alinhado com a inclinação das faces:
+```kotlin
+val pyramid = FloatingPyramid.builder()
+    .setBaseType(PyramidBase.SQUARE)
+    .setSize(baseWidth = 48f, height = 40f)
+    .setScale(0.025f)
+    .animateSpin(speedY = 0.5f)
+    .configureFace(PyramidFace.FACE_1) { face ->
+        face.setBackground(WindowColor.Solid(0xEE0F172A))
+            .setBorder(WindowColor.Solid(0xFFF59E0B), width = 1f)
+            .addText("TEMPLO DO SOL", color = WindowColor.Solid(0xFFF59E0B))
+    }
+    .configureBase { base ->
+        base.setBackground(WindowColor.Solid(0xFF1E293B))
+    }
+    .build()
+```
+
+### 5. Octaedro Regular 3D (`FloatingOctahedron`)
+8 faces triangulares equiláteras simétricas em 3D, ideal para cristais de poder, núcleos espaciais e artefatos mágicos:
+```kotlin
+val octahedron = FloatingOctahedron.builder()
+    .setSize(size = 40f)
+    .setScale(0.025f)
+    .animateTumble(speedX = 0.3f, speedY = 0.6f, speedZ = 0.2f)
+    .configureFace(OctahedronFace.TOP_FRONT_RIGHT) { face ->
+        face.setBackground(WindowColor.Solid(0xCC3B82F6))
+            .setBorder(WindowColor.Solid(0xFF60A5FA), width = 1f)
+            .addText("⚡", textScale = 1.4f)
+    }
+    .build()
+```
+
+### 6. Anel Orbital 3D / Torus Holográfico (`FloatingOrbitalRing`)
+Anel poligonal 3D segmentado no espaço com espessura radial, profundidade e rotação orbital inclinada contínua (`orbitalTilt`, `spinSpeed`), com suporte a satélites flutuantes:
+```kotlin
+val orbitalRing = FloatingOrbitalRing.builder()
+    .setRadius(48f)
+    .setBandWidth(6f)
+    .setDepth(3f)
+    .setOrbitalTilt(25f)
+    .animateSpin(0.4f)
+    .setColor(WindowColor.Solid(0xCC00F0FF))
+    .attachSatellite(angleDegrees = 0f) { sat ->
+        sat.setBackground(WindowColor.Solid(0xEE0F172A))
+            .addText("SATÉLITE ALPHA", color = WindowColor.Solid(0xFF38BDF8))
+    }
+    .build()
+```
+
 ---
 
-## 🔤 Letreiros 3D e Texto Flutuante Sem Janela (`FloatingText`)
+## 📺 Renderização & Transmissão de Entidades em Janelas
+
+O WorldPanel permite exibir modelos de entidades (jogadores, mobs, companheiros) diretamente em qualquer janela:
+
+### 1. Transmissão de Vídeo 2D (`addEntityVideoFeed`)
+Exibe uma entidade em um monitor 2D totalmente achatado no plano da janela ($Z = 0$), sem que a geometria 3D escape para fora da tela. Suporta estilos visuais com filtros de câmera:
+- `VideoFeedStyle.CLEAN` — Imagem limpa e nítida.
+- `VideoFeedStyle.SECURITY_CAMERA_CCTV` — Monitor de segurança com indicador `REC ●` piscante, carimbo de data/hora (OSD) e scanlines horizontais.
+- `VideoFeedStyle.CRT_SCANLINES` — Monitor retrô de tubo CRT com scanlines analógicas.
+- `VideoFeedStyle.CYBER_GREEN_HOLOGRAM` — Visor holográfico verde neon com feixe laser de varredura animado.
+
+```kotlin
+val cctvMonitor = FloatingWindow.builder()
+    .setShape(RectangleShape())
+    .addText("SISTEMA DE SEGURANÇA", color = WindowColor.Solid(0xFF38BDF8))
+    .addEntityVideoFeed(
+        entity = targetMobOrPlayer,
+        width = 64f,
+        height = 48f,
+        style = VideoFeedStyle.SECURITY_CAMERA_CCTV,
+        spinSpeed = 0.3f // 0 = frontal estático, >0 = gira suavemente
+    )
+    .build()
+```
+
+### 2. Miniatura 3D Rotativa (`addEntityPreview`)
+Ideal para bestiários, mostruários e telas de seleção:
+```kotlin
+window.addEntityPreview(
+    entity = bossEntity,
+    size = 40f,
+    spinSpeed = 1.0f,
+    pitchAngle = 10f
+)
+```
+
+### 3. Espelho em Tempo Real (`addLiveEntityMirror`)
+Exibe uma entidade viva espelhando suas animações corporais, movimento de pernas, equipamento e efeito de flash de dano vermelho em tempo real:
+```kotlin
+window.addLiveEntityMirror(
+    entity = player,
+    size = 42f,
+    mirrorRotation = true
+)
+```
+
+---
+
+## 🗺️ Mapa Holográfico 3D de Terreno & Radar de Entidades (`FloatingHoloMap`)
+
+O WorldPanel inclui um sistema de projeção holográfica volumétrica de terreno em tempo real estilo mesa tática militar / sci-fi:
+- **Amostragem em Chunks Caching:** Coleta relevo de terreno e blocos de superfície sem impacto no FPS (atualização throttled a cada ~700ms).
+- **Projeção Completa:** Anel emissor do pedestal, 4 feixes de luz nos cantos, colunas volumétricas de terreno com relevo real, laser de varredura de altitude e marcadores neon (blips) de entidades em tempo real.
+- **Cores por Tipo de Entidade:** Ciano neon para jogadores, vermelho para hostis, esmeralda para passivos e amarelo para outras entidades.
+
+### 1. Mesa Holográfica Independente (`FloatingHoloMap`)
+```kotlin
+val holoMap = FloatingHoloMap.builder()
+    .setChunkRadius(1) // Raio de chunks ao redor do centro (1 = área de 3x3 chunks)
+    .setSize(width = 140f, height = 90f)
+    .setScale(0.025f)
+    .setOffset(0.0, 1.5, 0.0)
+    .setTiltPitch(25f) // Inclinação da mesa em relação à visão
+    .animateSpin(speedY = 0.4f) // Rotação suave contínua
+    .setWireframe(true) // Mistura relevo do terreno com tom holográfico
+    .setShowEntityBlips(true) // Diamantes 3D flutuantes com feixes de luz
+    .build()
+
+// No seu renderizador:
+holoMap.render(poseStack, bufferSource, packedLight)
+```
+
+### 2. Elemento de Mapa Embutido em Janela (`addHoloMap`)
+Também pode ser incluído como elemento normal de layout em qualquer `FloatingWindow`:
+```kotlin
+val tacticalWindow = FloatingWindow.builder()
+    .addText("RADAR DE SETOR", color = WindowColor.Solid(0xFF00F0FF))
+    .addHoloMap(
+        radiusChunks = 1,
+        width = 64f,
+        height = 48f,
+        wireframeHologram = true,
+        showEntityBlips = true,
+        spinSpeedY = 0.5f
+    )
+    .build()
+```
+
+---
+
+## 🏛️ Maquete Cúbica Real do Mundo 1:1 (`FloatingChunkDiorama`)
+
+O `FloatingChunkDiorama` renderiza uma **maquete cúbica tridimensional real do mundo em miniatura**, exibindo blocos texturizados autênticos do Minecraft e entidades vivas em tempo real (com seus modelos, animações corporais e movimentos relativos 1:1).
+
+### Destaques e Arquitetura:
+- **Anti-Recursão Zero:** Prevenção automática de loops infinitos quando entidades no diorama possuem letreiros ou janelas anexadas (`IS_RENDERING_DIORAMA = ThreadLocal.withInitial { false }`).
+- **Renderização Real de Blocos 1:1:** Cada bloco no raio de amostragem é renderizado com sua textura, modelo e geometria reais do Minecraft.
+- **Oclusão Otimizada (`cullHiddenBlocks`):** Blocos totalmente encobertos por 6 vizinhos sólidos são descartados antes do pipeline de renderização, economizando drasticamente chamadas de desenho e mantendo FPS elevado.
+- **Entidades Vivas em Tempo Real:** Jogadores, mobs e NPCs dentro da maquete movem-se e animam sincronizados com o mundo real.
+- **Pedestal e Cúpula de Exibição:** Suporte a base de exibição com chanfro, redoma de vidro translúcida e moldura cúbica wireframe com cores customizáveis.
+- **Controle de Rotação e Inclinação:** Rotação suave contínua (`animateSpin`) e inclinação isométrica (`setTiltPitch`).
+
+### 1. Maquete Independente Flutuante no Mundo (`FloatingChunkDiorama`)
+```kotlin
+val diorama = FloatingChunkDiorama.builder()
+    .setRadius(radiusX = 4, radiusZ = 4) // Volume 9x9 blocos
+    .setHeight(heightBelow = 3, heightAbove = 5) // 3 blocos abaixo da superfície, 5 acima
+    .setScale(0.035f)
+    .setOffset(0.0, 1.8, 0.0)
+    .animateSpin(speedY = 0.3f) // Gira suavemente a maquete
+    .setTiltPitch(22f) // Inclinação isométrica para melhor visualização
+    .setRenderEntities(true) // Renderiza entidades vivas em movimento
+    .setCullHiddenBlocks(true) // Otimização extrema de blocos internos
+    .setShowBasePlate(true) // Pedestal chanfrado elegante
+    .setBasePlateColor(WindowColor.Solid(0xEE1E293B))
+    .setShowGlassEnclosure(true) // Cúpula de vidro ao redor da maquete
+    .setGlassColor(WindowColor.Solid(0x33E0F2FE))
+    .build()
+
+// No seu renderizador (ex: RenderLevelStageEvent):
+diorama.render(poseStack, bufferSource, packedLight)
+```
+
+### 2. Elemento Embutido em Janela (`addChunkDiorama`)
+Você também pode embutir uma maquete cúbica viva diretamente dentro de qualquer painel flutuante `FloatingWindow`:
+```kotlin
+val architecturalWindow = FloatingWindow.builder()
+    .addText("MAQUETE VIVA DO LOCAL", color = WindowColor.Solid(0xFF38BDF8))
+    .addChunkDiorama(
+        radiusX = 3,
+        radiusZ = 3,
+        heightBelow = 2,
+        heightAbove = 4,
+        width = 72f,
+        height = 54f,
+        renderEntities = true,
+        spinSpeedY = 0.4f,
+        tiltPitch = 25f
+    )
+    .build()
+```
+
+---
+
+## 🔤 Letreiros 3D, Texto Volumétrico e Texto Flutuante
+
+O WorldPanel oferece tanto letreiros minimalistas sem janela (`FloatingText`) quanto texto com **geometria 3D volumétrica real** (`FloatingVolumetricText`):
+
+### 1. Texto Volumétrico 3D Extrudado Real (`FloatingVolumetricText`)
+Diferente de camadas 2D transladadas, o `FloatingVolumetricText` constrói **geometria 3D real** para as letras:
+- **Paredes Laterais Extrudadas (Extrusion Walls):** Faixas conectando a face frontal à traseira com espessura configurável.
+- **Sombreamento Direcional & Normais:** Paredes laterais com sombreamento em tempo real baseado no ângulo da luz (`sideDarkening`, `lightAngleDegrees`).
+- **Chanfro / Bevel 3D:** Chanfro angular nas bordas frontais com reflexo especular metálico.
+- **Rotação Livre nos 3 Eixos:** Gira no espaço com `animateSpin` ou `animateTumble`.
+
+```kotlin
+val volumetricSign = FloatingVolumetricText.builder()
+    .setText("WORLD PANEL", WindowColor.Rainbow(speed = 1.0f))
+    .setThickness(2.5f)
+    .setBevel(0.3f)
+    .setSideDarkening(0.65f)
+    .setLightAngle(45f)
+    .setScale(0.035f)
+    .setOffset(0.0, 2.5, 0.0)
+    .animateTumble(speedX = 0.2f, speedY = 0.8f, speedZ = 0.1f)
+    .build()
+
+volumetricSign.render(poseStack, bufferSource, packedLight)
+```
+
+### 2. Letreiros 3D Rápidos (`FloatingText`)
 
 Para renderizar apenas texto flutuante no mundo — como nomes de chefes, indicadores de dano ou letreiros 3D com profundidade física:
 
