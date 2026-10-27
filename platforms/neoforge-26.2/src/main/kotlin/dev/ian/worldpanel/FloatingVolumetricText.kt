@@ -93,15 +93,76 @@ class FloatingVolumetricText private constructor(
             drawFaceText(poseStack, font, collector, displayMode, effectiveLight, brightness = 1.0f, timeSeconds = timeSeconds)
             poseStack.popPose()
         } else {
-            // 4. Back Face (-halfT - zEpsilon) - Seamlessly aligns with the back edge of the extrusion walls
+            // 4. Back Face (-halfT - zEpsilon) - Rendered per-glyph with 180 deg Y rotation to face outward (-Z)
             val backBrightness = 1.0f - sideDarkening * 0.4f
-            poseStack.pushPose()
-            poseStack.translate(0.0, 0.0, (-halfT - zEpsilon).toDouble())
-            drawFaceText(poseStack, font, collector, displayMode, effectiveLight, brightness = backBrightness, timeSeconds = timeSeconds)
-            poseStack.popPose()
+            drawBackFace(
+                poseStack = poseStack,
+                font = font,
+                collector = collector,
+                displayMode = displayMode,
+                packedLight = effectiveLight,
+                brightness = backBrightness,
+                zOffset = (-halfT - zEpsilon).toDouble(),
+                timeSeconds = timeSeconds,
+            )
         }
 
         poseStack.popPose()
+    }
+
+    private fun drawBackFace(
+        poseStack: PoseStack,
+        font: Font,
+        collector: SubmitNodeCollector,
+        displayMode: Font.DisplayMode,
+        packedLight: Int,
+        brightness: Float,
+        zOffset: Double,
+        timeSeconds: Double,
+    ) {
+        var currentX = 0f
+        val fullWidth = font.width(component).toFloat().coerceAtLeast(1f)
+        component.visit(
+            FormattedText.StyledContentConsumer<Unit> { style, fragment ->
+                val codePoints = fragment.codePoints().iterator()
+                while (codePoints.hasNext()) {
+                    val codePoint = codePoints.nextInt()
+                    val glyph = String(Character.toChars(codePoint))
+                    val glyphComp = Component.literal(glyph).setStyle(style)
+                    val gw = font.width(glyphComp).toFloat()
+
+                    if (!glyph.isBlank() && gw > 0f) {
+                        val u = (currentX + gw / 2f) / fullWidth
+                        val base = if (color is WindowColor.Solid) {
+                            color.resolve(0.5f, 0.5f, timeSeconds)
+                        } else {
+                            color.resolve(u.coerceIn(0f, 1f), 0.5f, timeSeconds)
+                        }
+                        val shaded = WindowColor.RGBA(base.r * brightness, base.g * brightness, base.b * brightness, base.a)
+
+                        poseStack.pushPose()
+                        poseStack.translate((currentX + gw).toDouble(), 0.0, zOffset)
+                        poseStack.mulPose(Axis.YP.rotationDegrees(180f))
+                        collector.submitText(
+                            poseStack,
+                            0f,
+                            0f,
+                            glyphComp.visualOrderText,
+                            false,
+                            displayMode,
+                            packedLight,
+                            shaded.toArgb(),
+                            0,
+                            0
+                        )
+                        poseStack.popPose()
+                    }
+                    currentX += gw
+                }
+                Optional.empty()
+            },
+            Style.EMPTY,
+        )
     }
 
     private fun drawFaceText(
