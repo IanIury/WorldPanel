@@ -3,6 +3,9 @@ package dev.ian.worldpanel
 import com.mojang.blaze3d.vertex.PoseStack
 import com.mojang.math.Axis
 import com.mojang.blaze3d.vertex.VertexConsumer
+import dev.ian.worldpanel.camera.CameraSource
+import dev.ian.worldpanel.camera.CameraView
+import dev.ian.worldpanel.camera.ScreenRenderTargetManager
 import dev.ian.worldpanel.layout.MeasurableElement
 import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
@@ -1089,6 +1092,221 @@ interface WindowElement : MeasurableElement {
             overlayBuilder.addVertex(overlayMatrix, drawX, b, borderZ).setColor(borderCol.r, borderCol.g, borderCol.b, borderCol.a).setLight(packedLight)
             overlayBuilder.addVertex(overlayMatrix, r, b, borderZ).setColor(borderCol.r, borderCol.g, borderCol.b, borderCol.a).setLight(packedLight)
             overlayBuilder.addVertex(overlayMatrix, r, b - bw, borderZ).setColor(borderCol.r, borderCol.g, borderCol.b, borderCol.a).setLight(packedLight)
+        }
+    }
+
+    /**
+     * Renders a true 2D flat video or camera feed (CCTV security monitor, spatial world camera,
+     * or biometric entity feed) strictly contained to the Z = 0 plane using an isolated RenderTarget texture.
+     * Completely eliminates 3D mesh protrusion and armor clipping when viewing the monitor from any angle.
+     */
+    class CameraFeed(
+        val source: CameraSource,
+        private val width: Float = 64f,
+        private val height: Float = 48f,
+        private val style: VideoFeedStyle = VideoFeedStyle.SECURITY_CAMERA_CCTV,
+        private val alignment: Text.TextAlignment = Text.TextAlignment.CENTER,
+        val feedId: String = "cam_${System.identityHashCode(source).toString(16)}",
+    ) : WindowElement {
+        constructor(
+            cameraView: CameraView,
+            width: Float = 64f,
+            height: Float = 48f,
+            style: VideoFeedStyle = VideoFeedStyle.SECURITY_CAMERA_CCTV,
+            alignment: Text.TextAlignment = Text.TextAlignment.CENTER,
+        ) : this(CameraSource.Spatial(cameraView), width, height, style, alignment)
+
+        constructor(
+            entity: LivingEntity,
+            width: Float = 64f,
+            height: Float = 48f,
+            style: VideoFeedStyle = VideoFeedStyle.SECURITY_CAMERA_CCTV,
+            alignment: Text.TextAlignment = Text.TextAlignment.CENTER,
+        ) : this(CameraSource.Entity(entity), width, height, style, alignment)
+
+        constructor(
+            width: Float = 64f,
+            height: Float = 48f,
+            style: VideoFeedStyle = VideoFeedStyle.SECURITY_CAMERA_CCTV,
+            alignment: Text.TextAlignment = Text.TextAlignment.CENTER,
+            entitySupplier: () -> LivingEntity?,
+        ) : this(CameraSource.Entity(entitySupplier), width, height, style, alignment)
+
+        private val safeWidth = width.coerceAtLeast(1f)
+        private val safeHeight = height.coerceAtLeast(1f)
+
+        override val alignmentRatio: Float
+            get() = when (alignment) {
+                Text.TextAlignment.LEFT -> 0f
+                Text.TextAlignment.CENTER -> 0.5f
+                Text.TextAlignment.RIGHT -> 1f
+            }
+
+        override fun getWidth(): Float = safeWidth
+        override fun getHeight(): Float = safeHeight
+
+        override fun render(
+            poseStack: PoseStack,
+            buffer: MultiBufferSource,
+            x: Float,
+            y: Float,
+            availableWidth: Float,
+            packedLight: Int,
+            seeThrough: Boolean,
+        ) {
+            val drawX = x + when (alignment) {
+                Text.TextAlignment.LEFT -> 0f
+                Text.TextAlignment.CENTER -> max(0f, (availableWidth - safeWidth) / 2f)
+                Text.TextAlignment.RIGHT -> max(0f, availableWidth - safeWidth)
+            }
+
+            val textureLocation = ScreenRenderTargetManager.getFeedTexture(feedId, source, style)
+            val renderType = if (seeThrough) RenderType.textBackgroundSeeThrough() else RenderType.textBackground()
+            val time = WindowColor.currentTimeSeconds()
+
+            // 1. Flat 2D Screen Quad at Z = 0.01f
+            val screenBuilder = buffer.getBuffer(RenderType.entityCutout(textureLocation))
+            val screenMatrix = poseStack.last().pose()
+            val r = drawX + safeWidth
+            val b = y + safeHeight
+            val zScreen = 0.01f
+
+            addTexturedVertex(screenBuilder, screenMatrix, drawX, y, zScreen, 0f, 0f, packedLight)
+            addTexturedVertex(screenBuilder, screenMatrix, drawX, b, zScreen, 0f, 1f, packedLight)
+            addTexturedVertex(screenBuilder, screenMatrix, r, b, zScreen, 1f, 1f, packedLight)
+            addTexturedVertex(screenBuilder, screenMatrix, r, y, zScreen, 1f, 0f, packedLight)
+
+            // 2. Scanlines Overlay at Z = 0.02f
+            if (style != VideoFeedStyle.CLEAN) {
+                val overlayBuilder = buffer.getBuffer(renderType)
+                val overlayMatrix = poseStack.last().pose()
+                val scanColor = when (style) {
+                    VideoFeedStyle.CYBER_GREEN_HOLOGRAM -> WindowColor.RGBA(0f, 1f, 0.4f, 0.12f)
+                    VideoFeedStyle.CRT_SCANLINES -> WindowColor.RGBA(0.2f, 0.7f, 1.0f, 0.16f)
+                    VideoFeedStyle.SECURITY_CAMERA_CCTV -> WindowColor.RGBA(0.05f, 0.1f, 0.15f, 0.20f)
+                    VideoFeedStyle.CLEAN -> WindowColor.RGBA(0f, 0f, 0f, 0f)
+                }
+
+                val lines = (safeHeight / 3f).toInt().coerceIn(6, 32)
+                val lineStep = safeHeight / lines.toFloat()
+                for (i in 0 until lines step 2) {
+                    val sy = y + i * lineStep
+                    val sh = lineStep * 0.5f
+                    overlayBuilder.addVertex(overlayMatrix, drawX, sy, 0.02f).setColor(scanColor.r, scanColor.g, scanColor.b, scanColor.a).setLight(packedLight)
+                    overlayBuilder.addVertex(overlayMatrix, drawX, sy + sh, 0.02f).setColor(scanColor.r, scanColor.g, scanColor.b, scanColor.a).setLight(packedLight)
+                    overlayBuilder.addVertex(overlayMatrix, drawX + safeWidth, sy + sh, 0.02f).setColor(scanColor.r, scanColor.g, scanColor.b, scanColor.a).setLight(packedLight)
+                    overlayBuilder.addVertex(overlayMatrix, drawX + safeWidth, sy, 0.02f).setColor(scanColor.r, scanColor.g, scanColor.b, scanColor.a).setLight(packedLight)
+                }
+            }
+
+            // 3. Monitor Bezel Frame at Z = 0.03f
+            val bezelBuilder = buffer.getBuffer(renderType)
+            val bezelMatrix = poseStack.last().pose()
+            val bw = 1.0f
+            val bezelColor = when (style) {
+                VideoFeedStyle.CYBER_GREEN_HOLOGRAM -> WindowColor.RGBA(0f, 0.8f, 0.3f, 0.9f)
+                VideoFeedStyle.CRT_SCANLINES -> WindowColor.RGBA(0.15f, 0.2f, 0.3f, 0.95f)
+                VideoFeedStyle.SECURITY_CAMERA_CCTV -> WindowColor.RGBA(0.12f, 0.15f, 0.20f, 0.95f)
+                VideoFeedStyle.CLEAN -> WindowColor.RGBA(0.25f, 0.3f, 0.38f, 0.9f)
+            }
+
+            // Top
+            bezelBuilder.addVertex(bezelMatrix, drawX - bw, y - bw, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+            bezelBuilder.addVertex(bezelMatrix, drawX - bw, y, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+            bezelBuilder.addVertex(bezelMatrix, r + bw, y, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+            bezelBuilder.addVertex(bezelMatrix, r + bw, y - bw, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+
+            // Bottom
+            bezelBuilder.addVertex(bezelMatrix, drawX - bw, b, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+            bezelBuilder.addVertex(bezelMatrix, drawX - bw, b + bw, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+            bezelBuilder.addVertex(bezelMatrix, r + bw, b + bw, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+            bezelBuilder.addVertex(bezelMatrix, r + bw, b, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+
+            // Left
+            bezelBuilder.addVertex(bezelMatrix, drawX - bw, y, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+            bezelBuilder.addVertex(bezelMatrix, drawX - bw, b, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+            bezelBuilder.addVertex(bezelMatrix, drawX, b, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+            bezelBuilder.addVertex(bezelMatrix, drawX, y, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+
+            // Right
+            bezelBuilder.addVertex(bezelMatrix, r, y, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+            bezelBuilder.addVertex(bezelMatrix, r, b, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+            bezelBuilder.addVertex(bezelMatrix, r + bw, b, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+            bezelBuilder.addVertex(bezelMatrix, r + bw, y, 0.03f).setColor(bezelColor.r, bezelColor.g, bezelColor.b, bezelColor.a).setLight(packedLight)
+
+            // 4. OSD HUD Overlays (REC blink, OSD labels) at Z = 0.035f
+            if (style == VideoFeedStyle.SECURITY_CAMERA_CCTV || style == VideoFeedStyle.CRT_SCANLINES || style == VideoFeedStyle.CYBER_GREEN_HOLOGRAM) {
+                val font = Minecraft.getInstance().font
+                val displayMode = if (seeThrough) Font.DisplayMode.SEE_THROUGH else Font.DisplayMode.POLYGON_OFFSET
+                val osdScale = 0.5f
+
+                // Blinking REC badge
+                val recBlink = (time % 1.0) < 0.6
+                if (recBlink && style == VideoFeedStyle.SECURITY_CAMERA_CCTV) {
+                    poseStack.pushPose()
+                    poseStack.translate(drawX.toDouble() + 3.0, y.toDouble() + 3.0, 0.035)
+                    poseStack.scale(osdScale, osdScale, 1f)
+                    font.drawInBatch(
+                        Component.literal("● REC"),
+                        0f,
+                        0f,
+                        0xFFEF4444.toInt(),
+                        false,
+                        poseStack.last().pose(),
+                        buffer,
+                        displayMode,
+                        0,
+                        0xF000F0
+                    )
+                    poseStack.popPose()
+                }
+
+                // Channel/Status text at bottom-left
+                val tagText = when (style) {
+                    VideoFeedStyle.CYBER_GREEN_HOLOGRAM -> "CYBER-LINK // OK"
+                    VideoFeedStyle.CRT_SCANLINES -> "AV-1 [NTSC]"
+                    else -> "CAM-01 [LIVE]"
+                }
+                poseStack.pushPose()
+                poseStack.translate(drawX.toDouble() + 3.0, y.toDouble() + safeHeight - 7.0, 0.035)
+                poseStack.scale(osdScale, osdScale, 1f)
+                val textColor = when (style) {
+                    VideoFeedStyle.CYBER_GREEN_HOLOGRAM -> 0xFF00FF66.toInt()
+                    VideoFeedStyle.CRT_SCANLINES -> 0xFF38BDF8.toInt()
+                    else -> 0xFF94A3B8.toInt()
+                }
+                font.drawInBatch(
+                    Component.literal(tagText),
+                    0f,
+                    0f,
+                    textColor,
+                    false,
+                    poseStack.last().pose(),
+                    buffer,
+                    displayMode,
+                    0,
+                    packedLight
+                )
+                poseStack.popPose()
+            }
+        }
+
+        private fun addTexturedVertex(
+            builder: VertexConsumer,
+            matrix: Matrix4f,
+            x: Float,
+            y: Float,
+            z: Float,
+            u: Float,
+            v: Float,
+            packedLight: Int,
+        ) {
+            builder.addVertex(matrix, x, y, z)
+                .setColor(1f, 1f, 1f, 1f)
+                .setUv(u, v)
+                .setOverlay(net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY)
+                .setLight(packedLight)
+                .setNormal(0f, 0f, 1f)
         }
     }
 

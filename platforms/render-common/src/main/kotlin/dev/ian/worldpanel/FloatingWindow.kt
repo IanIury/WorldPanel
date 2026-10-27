@@ -1,5 +1,8 @@
 package dev.ian.worldpanel
 
+import dev.ian.worldpanel.camera.CameraSource
+import dev.ian.worldpanel.camera.CameraView
+
 import com.mojang.blaze3d.vertex.PoseStack
 import dev.ian.worldpanel.animation.PanelAnimation
 import com.mojang.math.Axis
@@ -914,6 +917,92 @@ class FloatingWindow private constructor(
                 region = region
             )
         }
+
+        fun addCameraFeed(
+            cameraSource: CameraSource,
+            width: Float = 64f,
+            height: Float = 48f,
+            style: VideoFeedStyle = VideoFeedStyle.SECURITY_CAMERA_CCTV,
+            region: String? = null,
+            position: ElementPosition? = null,
+            alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
+        ) = apply {
+            addElementInternal(
+                WindowElement.CameraFeed(cameraSource, width, height, style, alignment),
+                position = position,
+                region = region
+            )
+        }
+
+        fun addCameraFeed(
+            cameraView: CameraView,
+            width: Float = 64f,
+            height: Float = 48f,
+            style: VideoFeedStyle = VideoFeedStyle.SECURITY_CAMERA_CCTV,
+            region: String? = null,
+            position: ElementPosition? = null,
+            alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
+        ) = addCameraFeed(CameraSource.Spatial(cameraView), width, height, style, region, position, alignment)
+
+        fun addCameraFeed(
+            entity: LivingEntity,
+            width: Float = 64f,
+            height: Float = 48f,
+            style: VideoFeedStyle = VideoFeedStyle.SECURITY_CAMERA_CCTV,
+            region: String? = null,
+            position: ElementPosition? = null,
+            alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
+        ) = addCameraFeed(CameraSource.Entity(entity), width, height, style, region, position, alignment)
+
+        fun addCameraFeed(
+            width: Float = 64f,
+            height: Float = 48f,
+            style: VideoFeedStyle = VideoFeedStyle.SECURITY_CAMERA_CCTV,
+            region: String? = null,
+            position: ElementPosition? = null,
+            alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
+            entitySupplier: () -> LivingEntity?,
+        ) = addCameraFeed(CameraSource.Entity(entitySupplier), width, height, style, region, position, alignment)
+
+        fun addFlatCameraFeed(
+            cameraSource: CameraSource,
+            width: Float = 64f,
+            height: Float = 48f,
+            style: VideoFeedStyle = VideoFeedStyle.SECURITY_CAMERA_CCTV,
+            region: String? = null,
+            position: ElementPosition? = null,
+            alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
+        ) = addCameraFeed(cameraSource, width, height, style, region, position, alignment)
+
+        fun addFlatCameraFeed(
+            cameraView: CameraView,
+            width: Float = 64f,
+            height: Float = 48f,
+            style: VideoFeedStyle = VideoFeedStyle.SECURITY_CAMERA_CCTV,
+            region: String? = null,
+            position: ElementPosition? = null,
+            alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
+        ) = addCameraFeed(CameraSource.Spatial(cameraView), width, height, style, region, position, alignment)
+
+        fun addFlatCameraFeed(
+            entity: LivingEntity,
+            width: Float = 64f,
+            height: Float = 48f,
+            style: VideoFeedStyle = VideoFeedStyle.SECURITY_CAMERA_CCTV,
+            region: String? = null,
+            position: ElementPosition? = null,
+            alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
+        ) = addCameraFeed(CameraSource.Entity(entity), width, height, style, region, position, alignment)
+
+        fun addFlatCameraFeed(
+            width: Float = 64f,
+            height: Float = 48f,
+            style: VideoFeedStyle = VideoFeedStyle.SECURITY_CAMERA_CCTV,
+            region: String? = null,
+            position: ElementPosition? = null,
+            alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
+            entitySupplier: () -> LivingEntity?,
+        ) = addCameraFeed(CameraSource.Entity(entitySupplier), width, height, style, region, position, alignment)
 
         fun addHoloMap(
             radiusChunks: Int = 1,

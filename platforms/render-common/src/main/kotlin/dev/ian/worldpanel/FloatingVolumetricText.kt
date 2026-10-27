@@ -91,27 +91,21 @@ class FloatingVolumetricText private constructor(
             // 3. Front Face (+halfT + zEpsilon) - Only drawn when camera is on the front side
             poseStack.pushPose()
             poseStack.translate(0.0, 0.0, (halfT + zEpsilon).toDouble())
-            drawFrontFace(poseStack, font, buffer, displayMode, effectiveLight, brightness = 1.0f, timeSeconds = timeSeconds)
+            drawFaceText(poseStack, font, buffer, displayMode, effectiveLight, brightness = 1.0f, timeSeconds = timeSeconds)
             poseStack.popPose()
         } else {
-            // 4. Back Face (-halfT - zEpsilon) - Only drawn when camera is on the back side
+            // 4. Back Face (-halfT - zEpsilon) - Seamlessly aligns with the back edge of the extrusion walls
             val backBrightness = 1.0f - sideDarkening * 0.4f
-            drawBackFace(
-                poseStack = poseStack,
-                font = font,
-                buffer = buffer,
-                displayMode = displayMode,
-                packedLight = effectiveLight,
-                brightness = backBrightness,
-                zOffset = (-halfT - zEpsilon).toDouble(),
-                timeSeconds = timeSeconds,
-            )
+            poseStack.pushPose()
+            poseStack.translate(0.0, 0.0, (-halfT - zEpsilon).toDouble())
+            drawFaceText(poseStack, font, buffer, displayMode, effectiveLight, brightness = backBrightness, timeSeconds = timeSeconds)
+            poseStack.popPose()
         }
 
         poseStack.popPose()
     }
 
-    private fun drawFrontFace(
+    private fun drawFaceText(
         poseStack: PoseStack,
         font: Font,
         buffer: MultiBufferSource,
@@ -167,60 +161,6 @@ class FloatingVolumetricText private constructor(
                 Style.EMPTY,
             )
         }
-    }
-
-    private fun drawBackFace(
-        poseStack: PoseStack,
-        font: Font,
-        buffer: MultiBufferSource,
-        displayMode: Font.DisplayMode,
-        packedLight: Int,
-        brightness: Float,
-        zOffset: Double,
-        timeSeconds: Double,
-    ) {
-        var currentX = 0f
-        val fullWidth = font.width(component).toFloat().coerceAtLeast(1f)
-        component.visit(
-            FormattedText.StyledContentConsumer<Unit> { style, fragment ->
-                val codePoints = fragment.codePoints().iterator()
-                while (codePoints.hasNext()) {
-                    val codePoint = codePoints.nextInt()
-                    val glyph = String(Character.toChars(codePoint))
-                    val glyphComp = Component.literal(glyph).setStyle(style)
-                    val gw = font.width(glyphComp).toFloat()
-                    val ch = if (glyph.isNotEmpty()) glyph[0] else ' '
-
-                    if (!glyph.isBlank() && gw > 0f) {
-                        val geometry = GlyphContourExtractor.getGeometry(ch)
-                        val alignWidth = if (geometry.pixelWidth > 0) geometry.pixelWidth.toFloat() else gw
-                        val u = (currentX + alignWidth / 2f) / fullWidth
-                        val base = color.resolve(u.coerceIn(0f, 1f), 0.5f, timeSeconds)
-                        val shaded = WindowColor.RGBA(base.r * brightness, base.g * brightness, base.b * brightness, base.a)
-
-                        poseStack.pushPose()
-                        poseStack.translate((currentX + alignWidth).toDouble(), 0.0, zOffset)
-                        poseStack.mulPose(Axis.YP.rotationDegrees(180f))
-                        font.drawInBatch(
-                            glyphComp,
-                            0f,
-                            0f,
-                            shaded.toArgb(),
-                            false,
-                            poseStack.last().pose(),
-                            buffer,
-                            displayMode,
-                            0,
-                            packedLight,
-                        )
-                        poseStack.popPose()
-                    }
-                    currentX += gw
-                }
-                Optional.empty()
-            },
-            Style.EMPTY,
-        )
     }
 
     private fun renderExtrusionWalls(
