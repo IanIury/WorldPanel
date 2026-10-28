@@ -429,6 +429,87 @@ window.addLiveEntityMirror(
 
 ---
 
+## 📹 Câmeras Virtuais com Feed 2D Real & Circuito de CFTV (`VirtualCameraConfig`)
+
+O WorldPanel oferece um **sistema completo de câmeras virtuais e transmissão de vídeo 2D**, projetado especificamente para renderizar circuitos fechados de televisão (CFTV), monitores de segurança, visores táticos e transmissões de vídeo ao vivo diretamente em janelas:
+
+- **Feed 2D Estritamente Plano (Zero Protrusão 3D):** A imagem da câmera virtual é renderizada em uma textura dinâmica offscreen isolada e mapeada como um quad texturizado bidimensional plano sobre a superfície do painel ($Z = 0.01$). Isso garante que os blocos e entidades do feed **nunca saltem para fora da janela**, mesmo quando o painel estiver fixado em uma parede e for observado lateralmente ou em ângulos oblíquos.
+- **Configuração Completa (`VirtualCameraConfig`):** Controle contínuo de coordenadas 3D ($X, Y, Z$), orientação ($yaw, pitch$), campo de visão ($FOV$), proporções de tela (`aspectRatio16x9`, `aspectRatio4x3`), resolução personalizada e controle de taxa de quadros (FPS throttling) para otimização extrema de performance.
+- **Modos de Rastreamento de Entidades (`CameraFollowMode`):**
+  - **Primeira Pessoa (`FIRST_PERSON`):** A câmera assume os olhos e a rotação da cabeça da entidade.
+  - **Terceira Pessoa Chase Cam (`THIRD_PERSON`):** Acompanha a entidade por trás e acima, a uma distância e altura configuráveis.
+  - **Câmera de Segurança PTZ (`ENTITY_TRACKING`):** Montada em uma posição fixa no mundo (ex: no teto de um galpão), calcula dinamicamente yaw e pitch em tempo real para manter o alvo sempre enquadrado no centro da tela.
+  - **Deslocamento Fixo (`FIXED_OFFSET`):** Mantém uma distância relativa configurável ($dX, dY, dZ$) em relação à posição da entidade.
+- **Chaveador de Câmeras (`CameraSwitcher`):** Permite alternar sequencialmente ou instantaneamente entre múltiplos canais de vigilância em uma mesma janela (ex: "CAM-01 ENTRADA", "CAM-02 COFRE", "CAM-03 PERÍMETRO").
+- **OSD HUD & Efeitos de Monitor:** Marcador piscante "● REC", carimbo com nome do canal e relógio em tempo real, linhas de varredura (scanlines), vinheta analógica e borda chanfrada de monitor.
+- **Fallback Gracioso ("NO SIGNAL"):** Se a região da câmera estiver em chunks descarregados, a entidade não existir ou o sinal for perdido, o monitor exibe automaticamente estática CRT com aviso técnico ("NO SIGNAL / UNLOADED CHUNK").
+
+### Exemplo 1: Câmera de Vigilância em Local Específico (16:9, 20 FPS)
+```kotlin
+// 1. Configurar a câmera virtual
+val entranceCamera = VirtualCameraConfig.builder("cam_portaria")
+    .position(120.5, 72.0, -340.5)
+    .rotation(yaw = 180f, pitch = -15f)
+    .fov(75f)
+    .aspectRatio16x9(baseWidth = 256)
+    .updateRate(fps = 20) // Throttled a 20 FPS para máximo desempenho
+    .build()
+
+// 2. Exibir o feed 2D na janela de monitor
+val securityMonitor = FloatingWindow.builder()
+    .setShape(RectangleShape())
+    .addText("MONITOR DE SEGURANÇA", color = WindowColor.Solid(0xFF38BDF8))
+    .addVirtualCameraFeed(
+        config = entranceCamera,
+        width = 80f,
+        height = 45f,
+        style = VideoFeedStyle.SECURITY_CAMERA_CCTV
+    )
+    .build()
+```
+
+### Exemplo 2: Câmera de Rastreamento PTZ (Acompanhando Jogador/Boss)
+```kotlin
+// Câmera montada no poste (100, 75, -200) que gira e rastreia o alvo
+val ptzSource = CameraSource.securityPTZ(
+    entity = targetBoss,
+    mountPos = Vec3(100.0, 75.0, -200.0),
+    fov = 60f
+)
+
+val ptzWindow = FloatingWindow.builder()
+    .addText("RASTREAMENTO PTZ // ATIVO", color = WindowColor.Solid(0xFF4ADE80))
+    .addCameraFeed(
+        cameraSource = ptzSource,
+        width = 72f,
+        height = 48f,
+        style = VideoFeedStyle.SECURITY_CAMERA_CCTV
+    )
+    .build()
+```
+
+### Exemplo 3: Chaveador Multicanal com Alternância de Câmeras
+```kotlin
+val switcher = CameraSwitcher()
+    .addCamera("ENTRADA", CameraSource.of(Vec3(10.0, 65.0, 20.0), 180f, -10f))
+    .addCamera("COFRE", CameraSource.of(Vec3(-40.0, 42.0, 85.0), 90f, -5f))
+    .addCamera("VIP", CameraSource.firstPerson(guardNpc))
+
+// Alternar canais dinamicamente via código ou interação
+switcher.next() // ou switcher.select("COFRE")
+
+val switcherMonitor = FloatingWindow.builder()
+    .addCameraSwitcherFeed(
+        switcher = switcher,
+        width = 72f,
+        height = 48f,
+        style = VideoFeedStyle.CRT_SCANLINES
+    )
+    .build()
+```
+
+---
+
 ## 🗺️ Mapa Holográfico 3D de Terreno & Radar de Entidades (`FloatingHoloMap`)
 
 O WorldPanel inclui um sistema de projeção holográfica volumétrica de terreno em tempo real estilo mesa tática militar / sci-fi:
@@ -437,14 +518,20 @@ O WorldPanel inclui um sistema de projeção holográfica volumétrica de terren
 - **Cores por Tipo de Entidade:** Ciano neon para jogadores, vermelho para hostis, esmeralda para passivos e amarelo para outras entidades.
 
 ### 1. Mesa Holográfica Independente (`FloatingHoloMap`)
+- **Visualização 360° Coerente:** Paredes completas nos 4 lados das colunas de relevo com sombreamento direcional (`FaceShade`), eliminando oclusões falsas ao redor da mesa.
+- **Hierarquia de Rotação Estável:** A inclinação da mesa (`tiltPitch`) e orientação de exibição (`facingYaw`) são aplicadas antes da rotação do terreno (`animateSpin`), eliminando oscilações de perspectiva (wobble).
+- **Culling por Distância:** Otimização automática (`setMaxRenderDistance`) para economizar GPU quando o jogador está distante.
+
 ```kotlin
 val holoMap = FloatingHoloMap.builder()
     .setChunkRadius(1) // Raio de chunks ao redor do centro (1 = área de 3x3 chunks)
     .setSize(width = 140f, height = 90f)
     .setScale(0.025f)
     .setOffset(0.0, 1.5, 0.0)
-    .setTiltPitch(25f) // Inclinação da mesa em relação à visão
-    .animateSpin(speedY = 0.4f) // Rotação suave contínua
+    .setFacingYaw(0f) // Orientação da mesa no mundo
+    .setTiltPitch(25f) // Inclinação estável da mesa
+    .animateSpin(speedY = 0.4f) // Rotação do relevo sobre a mesa
+    .setMaxRenderDistance(64.0) // Culling de distância automático
     .setWireframe(true) // Mistura relevo do terreno com tom holográfico
     .setShowEntityBlips(true) // Diamantes 3D flutuantes com feixes de luz
     .build()
@@ -484,18 +571,25 @@ O `FloatingChunkDiorama` renderiza uma **maquete cúbica tridimensional real do 
 - **Controle de Rotação e Inclinação:** Rotação suave contínua (`animateSpin`) e inclinação isométrica (`setTiltPitch`).
 
 ### 1. Maquete Independente Flutuante no Mundo (`FloatingChunkDiorama`)
+- **Moldura Cúbica Prismática 3D:** Bordas construídas como vigas tridimensionais sólidas com sombreamento em todas as faces, visíveis de qualquer ângulo sem desaparecer em visão tangencial.
+- **Hierarquia de Inclinação Isométrica:** Orientação no espaço (`facingYaw`) e inclinação (`tiltPitch`) aplicadas no suporte, mantendo o giro do conteúdo (`animateSpin`) perfeito sem distorção axial.
+- **Culling de Distância & Cache Compartilhado:** Cache inteligente de blocos e culling por distância (`setMaxRenderDistance`) para permitir dezenas de maquetes simultâneas com alto desempenho.
+
 ```kotlin
 val diorama = FloatingChunkDiorama.builder()
     .setRadius(radiusX = 4, radiusZ = 4) // Volume 9x9 blocos
     .setHeight(heightBelow = 3, heightAbove = 5) // 3 blocos abaixo da superfície, 5 acima
     .setScale(0.035f)
     .setOffset(0.0, 1.8, 0.0)
-    .animateSpin(speedY = 0.3f) // Gira suavemente a maquete
-    .setTiltPitch(22f) // Inclinação isométrica para melhor visualização
+    .setFacingYaw(0f) // Orientação da base no mundo
+    .setTiltPitch(22f) // Inclinação isométrica fixa
+    .animateSpin(speedY = 0.3f) // Gira suavemente o conteúdo
+    .setMaxRenderDistance(64.0) // Culling de distância
     .setRenderEntities(true) // Renderiza entidades vivas em movimento
     .setCullHiddenBlocks(true) // Otimização extrema de blocos internos
     .setShowBasePlate(true) // Pedestal chanfrado elegante
     .setBasePlateColor(WindowColor.Solid(0xEE1E293B))
+    .setShowBoundaryBox(true) // Moldura de vigas sólidas 3D
     .setShowGlassEnclosure(true) // Cúpula de vidro ao redor da maquete
     .setGlassColor(WindowColor.Solid(0x33E0F2FE))
     .build()

@@ -1,6 +1,8 @@
 package dev.ian.worldpanel
 
 import dev.ian.worldpanel.camera.CameraSource
+import dev.ian.worldpanel.camera.CameraSwitcher
+import dev.ian.worldpanel.camera.VirtualCameraConfig
 import dev.ian.worldpanel.camera.CameraView
 
 import com.mojang.blaze3d.vertex.PoseStack
@@ -1496,6 +1498,39 @@ class FloatingWindow private constructor(
             feedId: String? = null,
             entitySupplier: () -> LivingEntity?,
         ) = addCameraFeed(CameraSource.Entity(entitySupplier), width, height, style, region, position, alignment, feedId)
+
+        fun addVirtualCameraFeed(
+            config: VirtualCameraConfig,
+            width: Float = 64f,
+            height: Float = 48f,
+            style: VideoFeedStyle = VideoFeedStyle.SECURITY_CAMERA_CCTV,
+            region: String? = null,
+            position: ElementPosition? = null,
+            alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
+            feedId: String? = null,
+        ) = apply {
+            addElementInternal(
+                WindowElement.CameraFeed(config, width, height, style, alignment, feedId),
+                position = position,
+                region = region
+            )
+        }
+
+        fun addCameraSwitcherFeed(
+            switcher: CameraSwitcher,
+            width: Float = 64f,
+            height: Float = 48f,
+            style: VideoFeedStyle = VideoFeedStyle.SECURITY_CAMERA_CCTV,
+            region: String? = null,
+            position: ElementPosition? = null,
+            alignment: WindowElement.Text.TextAlignment = WindowElement.Text.TextAlignment.CENTER,
+        ) = apply {
+            addElementInternal(
+                WindowElement.CameraFeed(switcher, width, height, style, alignment),
+                position = position,
+                region = region
+            )
+        }
 
         fun addHoloMap(
             radiusChunks: Int = 1,

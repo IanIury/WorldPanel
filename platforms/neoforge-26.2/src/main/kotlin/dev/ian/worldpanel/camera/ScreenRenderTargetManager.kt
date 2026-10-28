@@ -2,26 +2,32 @@ package dev.ian.worldpanel.camera
 
 import com.mojang.blaze3d.platform.NativeImage
 import dev.ian.worldpanel.VideoFeedStyle
-import dev.ian.worldpanel.WindowColor
 import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.texture.DynamicTexture
+import net.minecraft.core.BlockPos
 import net.minecraft.resources.Identifier
 import net.minecraft.world.entity.LivingEntity
+import net.minecraft.world.level.block.Blocks
 import net.minecraft.world.phys.AABB
 import net.minecraft.world.phys.Vec3
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
  * High-performance offscreen render target and dynamic texture manager for 2D flat camera and CCTV feeds.
- * Generates true 2D raster feeds on an isolated buffer, eliminating 3D geometry protrusion from the window pane.
+ * Generates true 2D raster feeds on an isolated texture buffer, eliminating 3D geometry protrusion from the window pane.
+ *
+ * Supports multi-panel texture sharing, update rate throttling, entity tracking, chunk-load validation,
+ * and graceful fallback ("NO SIGNAL" / CRT noise) when areas are unloaded or targets are lost.
  */
 object ScreenRenderTargetManager {
     const val BUFFER_WIDTH = 256
     const val BUFFER_HEIGHT = 256
-    const val MAX_BUFFERS = 16
-    const val EXPIRATION_MS = 5000L
+    const val MAX_BUFFERS = 32
+    const val EXPIRATION_MS = 6000L
 
     private class FeedBuffer(val location: Identifier) {
         val image: NativeImage = NativeImage(BUFFER_WIDTH, BUFFER_HEIGHT, false)
@@ -52,7 +58,7 @@ object ScreenRenderTargetManager {
     ): Identifier {
         val now = System.currentTimeMillis()
 
-        // 1. Evict expired buffers (unused for > 5 seconds)
+        // 1. Evict expired buffers (unused for > 6 seconds)
         val iterator = buffers.entries.iterator()
         while (iterator.hasNext()) {
             val entry = iterator.next()
@@ -79,7 +85,18 @@ object ScreenRenderTargetManager {
 
         buffer.lastAccessMs = now
 
-        if (now - buffer.lastUpdateMs >= 50L) { // 20 updates per second
+        // Determine throttle interval
+        val minIntervalMs: Long = when (source) {
+            is CameraSource.Virtual -> {
+                if (source.config.state == VirtualCameraState.PAUSED) {
+                    return location // Keep frozen frame
+                }
+                source.config.minUpdateIntervalMs
+            }
+            else -> 50L // 20 FPS default
+        }
+
+        if (now - buffer.lastUpdateMs >= minIntervalMs) {
             buffer.lastUpdateMs = now
             renderFeedToImage(buffer.image, source, style, now)
             buffer.upload()
@@ -98,10 +115,10 @@ object ScreenRenderTargetManager {
 
         // 1. Background Fill
         val bgArgb = when (style) {
-            VideoFeedStyle.CLEAN -> 0xFF10141D.toInt()
-            VideoFeedStyle.SECURITY_CAMERA_CCTV -> 0xFF080D14.toInt()
-            VideoFeedStyle.CRT_SCANLINES -> 0xFF04060A.toInt()
-            VideoFeedStyle.CYBER_GREEN_HOLOGRAM -> 0xFF021006.toInt()
+            VideoFeedStyle.CLEAN -> 0xFF0F172A.toInt()
+            VideoFeedStyle.SECURITY_CAMERA_CCTV -> 0xFF060B12.toInt()
+            VideoFeedStyle.CRT_SCANLINES -> 0xFF020408.toInt()
+            VideoFeedStyle.CYBER_GREEN_HOLOGRAM -> 0xFF010D04.toInt()
         }
 
         for (y in 0 until BUFFER_HEIGHT) {
@@ -115,22 +132,25 @@ object ScreenRenderTargetManager {
             is CameraSource.Spatial -> {
                 renderSpatialScene(img, source.view, style, timeSec)
             }
+            is CameraSource.Virtual -> {
+                if (source.config.state == VirtualCameraState.DISABLED) {
+                    renderNoSignal(img, style, timeSec, "CAMERA DISABLED")
+                } else {
+                    val view = source.resolveView()
+                    renderSpatialScene(img, view, style, timeSec)
+                }
+            }
             is CameraSource.Entity -> {
                 val entity = source.entitySupplier()
-                if (entity != null) {
-                    if (source.useEyePosition) {
-                        val view = CameraView(
-                            position = entity.eyePosition,
-                            yaw = entity.yRot,
-                            pitch = entity.xRot,
-                            fov = source.fov
-                        )
+                if (entity != null && !entity.isRemoved) {
+                    val view = source.resolveView()
+                    if (view != null) {
                         renderSpatialScene(img, view, style, timeSec)
                     } else {
                         renderEntitySubjectFeed(img, entity, source.spinSpeed, style, timeSec)
                     }
                 } else {
-                    renderNoSignal(img, style, timeSec)
+                    renderNoSignal(img, style, timeSec, "TARGET LOST")
                 }
             }
         }
@@ -145,6 +165,16 @@ object ScreenRenderTargetManager {
         style: VideoFeedStyle,
         timeSec: Double,
     ) {
+        val mc = Minecraft.getInstance()
+        val level = mc.level
+        val camBlockPos = BlockPos.containing(view.position)
+
+        // Validate chunk presence for graceful fallback
+        if (level == null || !level.hasChunk(camBlockPos.x shr 4, camBlockPos.z shr 4)) {
+            renderNoSignal(img, style, timeSec, "UNLOADED CHUNK")
+            return
+        }
+
         val fgColor = when (style) {
             VideoFeedStyle.CYBER_GREEN_HOLOGRAM -> 0xFF00FF66.toInt()
             VideoFeedStyle.SECURITY_CAMERA_CCTV -> 0xFF4ADE80.toInt()
@@ -161,26 +191,37 @@ object ScreenRenderTargetManager {
         val cx = BUFFER_WIDTH / 2
         val cy = BUFFER_HEIGHT / 2
 
-        // Horizon line with pitch tilt
-        val pitchRad = Math.toRadians(view.pitch.toDouble())
+        // 1. Horizon & Sky / Ground Separation
         val pitchOffset = (view.pitch * 1.5f).toInt()
-        val horizonY = (cy + pitchOffset).coerceIn(20, BUFFER_HEIGHT - 20)
+        val horizonY = (cy + pitchOffset).coerceIn(15, BUFFER_HEIGHT - 15)
 
         // Ground grid pattern below horizon
         var yGrid = horizonY + 12
-        while (yGrid < BUFFER_HEIGHT - 10) {
-            drawLine(img, 10, yGrid, BUFFER_WIDTH - 10, yGrid, dimColor)
+        while (yGrid < BUFFER_HEIGHT - 8) {
+            drawLine(img, 8, yGrid, BUFFER_WIDTH - 8, yGrid, dimColor)
             yGrid += 16
         }
 
-        // Horizon line
-        drawLine(img, 20, horizonY, BUFFER_WIDTH - 20, horizonY, fgColor)
+        // Ground perspective lines
+        val vanishX = cx
+        for (i in -4..4) {
+            val bottomX = cx + i * 36
+            if (bottomX in 0 until BUFFER_WIDTH) {
+                drawLine(img, vanishX, horizonY, bottomX, BUFFER_HEIGHT - 1, dimColor)
+            }
+        }
 
-        // Pitch ladder ticks
+        // Horizon line
+        drawLine(img, 12, horizonY, BUFFER_WIDTH - 12, horizonY, fgColor)
+
+        // 2. Sample and project real nearby terrain blocks
+        renderTerrainVoxelProjection(img, level, view, style)
+
+        // 3. Pitch ladder ticks
         for (p in -30..30 step 15) {
             if (p == 0) continue
             val py = cy + ((view.pitch - p) * 1.5f).toInt()
-            if (py in 25 until BUFFER_HEIGHT - 25) {
+            if (py in 22 until BUFFER_HEIGHT - 22) {
                 drawLine(img, cx - 18, py, cx - 6, py, fgColor)
                 drawLine(img, cx + 6, py, cx + 18, py, fgColor)
                 drawTinyString(img, "${kotlin.math.abs(p)}", cx + 22, py - 3, dimColor)
@@ -201,17 +242,112 @@ object ScreenRenderTargetManager {
         // Compass heading at top
         val yawDeg = (view.yaw % 360f + 360f) % 360f
         val headingStr = getHeadingName(yawDeg)
-        drawTinyString(img, "HDG: $headingStr (${yawDeg.toInt()}°)", cx - 36, 12, fgColor)
-        drawLine(img, cx - 40, 20, cx + 40, 20, dimColor)
-        drawLine(img, cx, 18, cx, 22, fgColor)
+        drawTinyString(img, "HDG: $headingStr (${yawDeg.toInt()}°)", cx - 36, 10, fgColor)
+        drawLine(img, cx - 44, 18, cx + 44, 18, dimColor)
+        drawLine(img, cx, 16, cx, 20, fgColor)
 
         // Coordinate telemetry at bottom
         val pos = view.position
         val posStr = "X: %.1f  Y: %.1f  Z: %.1f".format(pos.x, pos.y, pos.z)
-        drawTinyString(img, posStr, 12, BUFFER_HEIGHT - 18, fgColor)
+        drawTinyString(img, posStr, 12, BUFFER_HEIGHT - 16, fgColor)
 
-        // Scan nearby entities in field of view
+        // Scan and project nearby entities in field of view
         scanNearbyEntities(img, view, fgColor, timeSec)
+    }
+
+    private fun renderTerrainVoxelProjection(
+        img: NativeImage,
+        level: net.minecraft.world.level.Level,
+        view: CameraView,
+        style: VideoFeedStyle,
+    ) {
+        val camPos = view.position
+        val camX = camPos.x
+        val camY = camPos.y
+        val camZ = camPos.z
+
+        val yawRad = Math.toRadians(-view.yaw.toDouble())
+        val pitchRad = Math.toRadians(-view.pitch.toDouble())
+        val cosY = cos(yawRad)
+        val sinY = sin(yawRad)
+        val cosP = cos(pitchRad)
+        val sinP = sin(pitchRad)
+
+        val fov = view.fov.coerceIn(20f, 120f)
+        val focal = (BUFFER_WIDTH / 2.0) / kotlin.math.tan(Math.toRadians(fov / 2.0))
+        val cx = BUFFER_WIDTH / 2.0
+        val cy = BUFFER_HEIGHT / 2.0
+
+        val blockRadius = 10
+        val minBx = (camX - blockRadius).toInt()
+        val maxBx = (camX + blockRadius).toInt()
+        val minBz = (camZ - blockRadius).toInt()
+        val maxBz = (camZ + blockRadius).toInt()
+        val minBy = (camY - 6).toInt().coerceAtLeast(level.minY)
+        val maxBy = (camY + 6).toInt().coerceAtMost(level.maxY)
+
+        val mutPos = BlockPos.MutableBlockPos()
+
+        for (bx in minBx..maxBx step 2) {
+            for (bz in minBz..maxBz step 2) {
+                // Find highest non-air block
+                for (by in maxBy downTo minBy) {
+                    mutPos.set(bx, by, bz)
+                    val state = level.getBlockState(mutPos)
+                    if (state.isAir || state.`is`(Blocks.VOID_AIR) || state.`is`(Blocks.CAVE_AIR)) continue
+
+                    // Relative coords to camera
+                    val rx = bx + 0.5 - camX
+                    val ry = by + 0.5 - camY
+                    val rz = bz + 0.5 - camZ
+
+                    // Rotate by Yaw
+                    val x1 = rx * cosY - rz * sinY
+                    val z1 = rx * sinY + rz * cosY
+
+                    // Rotate by Pitch
+                    val y2 = ry * cosP - z1 * sinP
+                    val z2 = ry * sinP + z1 * cosP
+
+                    if (z2 < 1.0 || z2 > 24.0) break // In front of camera check
+
+                    val px = (cx + (x1 / z2) * focal).toInt()
+                    val py = (cy - (y2 / z2) * focal).toInt()
+
+                    if (px in 6 until BUFFER_WIDTH - 6 && py in 18 until BUFFER_HEIGHT - 18) {
+                        val mapCol = state.getMapColor(level, mutPos).col
+                        val blockCol = when (style) {
+                            VideoFeedStyle.CYBER_GREEN_HOLOGRAM -> 0xFF00AA44.toInt()
+                            VideoFeedStyle.SECURITY_CAMERA_CCTV -> {
+                                val r = (((mapCol ushr 16) and 0xFF) * 0.4f).toInt()
+                                val g = (((mapCol ushr 8) and 0xFF) * 0.85f).toInt()
+                                val b = (((mapCol) and 0xFF) * 0.5f).toInt()
+                                (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+                            }
+                            VideoFeedStyle.CRT_SCANLINES -> {
+                                val r = (((mapCol ushr 16) and 0xFF) * 0.6f).toInt()
+                                val g = (((mapCol ushr 8) and 0xFF) * 0.8f).toInt()
+                                val b = (((mapCol) and 0xFF) * 0.9f).toInt()
+                                (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+                            }
+                            VideoFeedStyle.CLEAN -> (0xFF shl 24) or mapCol
+                        }
+
+                        val dotSize = (focal / (z2 * 2.5)).toInt().coerceIn(1, 4)
+                        for (dx in -dotSize..dotSize) {
+                            for (dy in -dotSize..dotSize) {
+                                val sx = px + dx
+                                val sy = py + dy
+                                if (sx in 0 until BUFFER_WIDTH && sy in 0 until BUFFER_HEIGHT) {
+                                    img.setPixel(sx, sy, blockCol)
+                                }
+                            }
+                        }
+                    }
+                    break
+                }
+            }
+        }
     }
 
     private fun renderEntitySubjectFeed(
@@ -245,7 +381,6 @@ object ScreenRenderTargetManager {
         // Silhouette / Biometric avatar wireframe
         val rotAngle = (timeSec * spinSpeed * 2.0).toFloat()
         val cosR = cos(rotAngle)
-        val sinR = sin(rotAngle)
 
         // Head circle
         val headY = cy - 40
@@ -288,12 +423,25 @@ object ScreenRenderTargetManager {
         drawTinyString(img, "STATUS: TRACKED", 12, 32, fgColor)
     }
 
-    private fun renderNoSignal(img: NativeImage, style: VideoFeedStyle, timeSec: Double) {
+    private fun renderNoSignal(img: NativeImage, style: VideoFeedStyle, timeSec: Double, reason: String = "NO SIGNAL") {
         val cx = BUFFER_WIDTH / 2
         val cy = BUFFER_HEIGHT / 2
         val fgColor = 0xFFEF4444.toInt()
-        drawTinyString(img, "NO SIGNAL", cx - 24, cy - 4, fgColor)
-        drawCornerBrackets(img, 20, 20, BUFFER_WIDTH - 20, BUFFER_HEIGHT - 20, 10, 0x44EF4444.toInt())
+
+        // Static noise pattern
+        for (y in 0 until BUFFER_HEIGHT step 2) {
+            val seed = ((y * 31337 + (timeSec * 1000.0).toLong()) * 1103515245L)
+            for (x in 0 until BUFFER_WIDTH step 2) {
+                if (((seed xor (x.toLong() * 48271L)) and 7L) == 0L) {
+                    val noise = 0x4494A3B8.toInt()
+                    img.setPixel(x, y, noise)
+                    img.setPixel(x + 1, y, noise)
+                }
+            }
+        }
+
+        drawTinyString(img, reason, cx - (reason.length * 2), cy - 4, fgColor)
+        drawCornerBrackets(img, 24, 24, BUFFER_WIDTH - 24, BUFFER_HEIGHT - 24, 12, 0x66EF4444.toInt())
     }
 
     private fun scanNearbyEntities(
@@ -310,19 +458,19 @@ object ScreenRenderTargetManager {
 
         var targetCount = 0
         for (e in entities) {
-            if (targetCount >= 3) break
+            if (targetCount >= 4) break
             val dist = pos.distanceTo(e.position())
             if (dist < 1.0) continue
 
             // Angle relative to camera yaw
             val dx = e.x - pos.x
             val dz = e.z - pos.z
-            val targetYaw = Math.toDegrees(kotlin.math.atan2(-dx, dz)).toFloat()
+            val targetYaw = Math.toDegrees(atan2(-dx, dz)).toFloat()
             val diffYaw = ((targetYaw - view.yaw + 180f) % 360f + 360f) % 360f - 180f
 
             if (kotlin.math.abs(diffYaw) < view.fov / 2f) {
                 val screenX = (BUFFER_WIDTH / 2 + (diffYaw / (view.fov / 2f)) * (BUFFER_WIDTH / 2f * 0.8f)).toInt()
-                val screenY = (BUFFER_HEIGHT / 2).coerceIn(40, BUFFER_HEIGHT - 40)
+                val screenY = (BUFFER_HEIGHT / 2).coerceIn(36, BUFFER_HEIGHT - 36)
 
                 drawCornerBrackets(img, screenX - 12, screenY - 16, screenX + 12, screenY + 16, 4, color)
                 val label = "${e.type.description.string.take(8)} ${dist.toInt()}m"
@@ -477,7 +625,9 @@ object ScreenRenderTargetManager {
         'G' to intArrayOf(0b111, 0b100, 0b101, 0b101, 0b111),
         'H' to intArrayOf(0b101, 0b101, 0b111, 0b101, 0b101),
         'I' to intArrayOf(0b111, 0b010, 0b010, 0b010, 0b111),
+        'K' to intArrayOf(0b101, 0b110, 0b100, 0b110, 0b101),
         'L' to intArrayOf(0b100, 0b100, 0b100, 0b100, 0b111),
+        'M' to intArrayOf(0b101, 0b111, 0b101, 0b101, 0b101),
         'N' to intArrayOf(0b111, 0b101, 0b101, 0b101, 0b101),
         'O' to intArrayOf(0b111, 0b101, 0b101, 0b101, 0b111),
         'P' to intArrayOf(0b111, 0b101, 0b111, 0b100, 0b100),

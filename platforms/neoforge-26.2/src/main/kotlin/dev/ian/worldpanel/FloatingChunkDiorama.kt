@@ -16,6 +16,9 @@ import org.joml.Matrix4f
  * A 3D miniature cubic diorama (Maquete Real do Mundo 1:1) of the local Minecraft world.
  * Renders real textured blocks and live entities with their real-time animations,
  * mounted on an optional showcase pedestal or enclosed in a glass display cube.
+ *
+ * Supports true 3D volumetric observation from 360-degree angles, fixed-table tilt,
+ * solid 3D prism wireframe borders, and distance-based culling for high FPS.
  */
 class FloatingChunkDiorama private constructor(
     val radiusX: Int,
@@ -40,6 +43,8 @@ class FloatingChunkDiorama private constructor(
     val updateIntervalMs: Long,
     val entityFilter: ((Entity) -> Boolean)?,
     val pivotAtBase: Boolean,
+    val facingYaw: Float = 0f,
+    val maxRenderDistance: Double = 64.0,
 ) {
     companion object {
         @PublishedApi
@@ -74,6 +79,18 @@ class FloatingChunkDiorama private constructor(
     )
 
     fun render(poseStack: PoseStack, collector: OrderedSubmitNodeCollector, packedLight: Int) {
+        val mc = Minecraft.getInstance()
+        val player = mc.player
+        if (player != null && maxRenderDistance > 0.0) {
+            val dx = player.x - offsetX
+            val dy = player.y - offsetY
+            val dz = player.z - offsetZ
+            val maxSq = maxRenderDistance * maxRenderDistance
+            if ((dx * dx + dy * dy + dz * dz) > maxSq) {
+                return
+            }
+        }
+
         withDioramaLock {
             sampler.updateIfNeeded()
 
@@ -83,8 +100,10 @@ class FloatingChunkDiorama private constructor(
             poseStack.pushPose()
             poseStack.translate(offsetX, offsetY, offsetZ)
 
-            if (rotYaw != 0f) poseStack.mulPose(Axis.YP.rotationDegrees(rotYaw))
+            // Hierarchical rotation: table heading -> table tilt pitch -> turntable content spin
+            if (facingYaw != 0f) poseStack.mulPose(Axis.YP.rotationDegrees(facingYaw))
             if (tiltPitch != 0f) poseStack.mulPose(Axis.XP.rotationDegrees(tiltPitch))
+            if (rotYaw != 0f) poseStack.mulPose(Axis.YP.rotationDegrees(rotYaw))
             poseStack.scale(scale, scale, scale)
 
             // Center pivot
@@ -294,32 +313,107 @@ class FloatingChunkDiorama private constructor(
 
             if (showBoundaryBox) {
                 val bCol = boundaryBoxColor.resolve(0.5f, 0.5f, timeSeconds)
-                val bw = 0.06f
+                val bw = 0.05f
 
-                fun drawEdge(x0: Float, y0: Float, z0: Float, x1: Float, y1: Float, z1: Float) {
-                    builder.addVertex(matrix, x0 - bw, y0 - bw, z0 - bw).setColor(bCol.r, bCol.g, bCol.b, bCol.a)
-                    builder.addVertex(matrix, x0 + bw, y0 + bw, z0 + bw).setColor(bCol.r, bCol.g, bCol.b, bCol.a)
-                    builder.addVertex(matrix, x1 + bw, y1 + bw, z1 + bw).setColor(bCol.r, bCol.g, bCol.b, bCol.a)
-                    builder.addVertex(matrix, x1 - bw, y1 - bw, z1 - bw).setColor(bCol.r, bCol.g, bCol.b, bCol.a)
+                // Draw true 3D square beam frames around the diorama box
+                fun drawBeamX(x0: Float, x1: Float, y: Float, z: Float) {
+                    val cr = bCol.r
+                    val cg = bCol.g
+                    val cb = bCol.b
+                    val ca = bCol.a
+                    // Top face (+Y)
+                    builder.addVertex(matrix, x0, y + bw, z - bw).setColor(cr, cg, cb, ca)
+                    builder.addVertex(matrix, x0, y + bw, z + bw).setColor(cr, cg, cb, ca)
+                    builder.addVertex(matrix, x1, y + bw, z + bw).setColor(cr, cg, cb, ca)
+                    builder.addVertex(matrix, x1, y + bw, z - bw).setColor(cr, cg, cb, ca)
+                    // Bottom face (-Y)
+                    builder.addVertex(matrix, x0, y - bw, z + bw).setColor(cr * 0.6f, cg * 0.6f, cb * 0.6f, ca)
+                    builder.addVertex(matrix, x0, y - bw, z - bw).setColor(cr * 0.6f, cg * 0.6f, cb * 0.6f, ca)
+                    builder.addVertex(matrix, x1, y - bw, z - bw).setColor(cr * 0.6f, cg * 0.6f, cb * 0.6f, ca)
+                    builder.addVertex(matrix, x1, y - bw, z + bw).setColor(cr * 0.6f, cg * 0.6f, cb * 0.6f, ca)
+                    // Front face (+Z)
+                    builder.addVertex(matrix, x0, y - bw, z + bw).setColor(cr * 0.8f, cg * 0.8f, cb * 0.8f, ca)
+                    builder.addVertex(matrix, x1, y - bw, z + bw).setColor(cr * 0.8f, cg * 0.8f, cb * 0.8f, ca)
+                    builder.addVertex(matrix, x1, y + bw, z + bw).setColor(cr * 0.8f, cg * 0.8f, cb * 0.8f, ca)
+                    builder.addVertex(matrix, x0, y + bw, z + bw).setColor(cr * 0.8f, cg * 0.8f, cb * 0.8f, ca)
+                    // Back face (-Z)
+                    builder.addVertex(matrix, x1, y - bw, z - bw).setColor(cr * 0.8f, cg * 0.8f, cb * 0.8f, ca)
+                    builder.addVertex(matrix, x0, y - bw, z - bw).setColor(cr * 0.8f, cg * 0.8f, cb * 0.8f, ca)
+                    builder.addVertex(matrix, x0, y + bw, z - bw).setColor(cr * 0.8f, cg * 0.8f, cb * 0.8f, ca)
+                    builder.addVertex(matrix, x1, y + bw, z - bw).setColor(cr * 0.8f, cg * 0.8f, cb * 0.8f, ca)
                 }
 
-                // 4 vertical pillars
-                drawEdge(minX, minY, minZ, minX, maxY, minZ)
-                drawEdge(maxX, minY, minZ, maxX, maxY, minZ)
-                drawEdge(minX, minY, maxZ, minX, maxY, maxZ)
-                drawEdge(maxX, minY, maxZ, maxX, maxY, maxZ)
+                fun drawBeamZ(x: Float, y: Float, z0: Float, z1: Float) {
+                    val cr = bCol.r
+                    val cg = bCol.g
+                    val cb = bCol.b
+                    val ca = bCol.a
+                    // Top face (+Y)
+                    builder.addVertex(matrix, x - bw, y + bw, z0).setColor(cr, cg, cb, ca)
+                    builder.addVertex(matrix, x - bw, y + bw, z1).setColor(cr, cg, cb, ca)
+                    builder.addVertex(matrix, x + bw, y + bw, z1).setColor(cr, cg, cb, ca)
+                    builder.addVertex(matrix, x + bw, y + bw, z0).setColor(cr, cg, cb, ca)
+                    // Bottom face (-Y)
+                    builder.addVertex(matrix, x - bw, y - bw, z1).setColor(cr * 0.6f, cg * 0.6f, cb * 0.6f, ca)
+                    builder.addVertex(matrix, x - bw, y - bw, z0).setColor(cr * 0.6f, cg * 0.6f, cb * 0.6f, ca)
+                    builder.addVertex(matrix, x + bw, y - bw, z0).setColor(cr * 0.6f, cg * 0.6f, cb * 0.6f, ca)
+                    builder.addVertex(matrix, x + bw, y - bw, z1).setColor(cr * 0.6f, cg * 0.6f, cb * 0.6f, ca)
+                    // West face (-X)
+                    builder.addVertex(matrix, x - bw, y - bw, z0).setColor(cr * 0.7f, cg * 0.7f, cb * 0.7f, ca)
+                    builder.addVertex(matrix, x - bw, y - bw, z1).setColor(cr * 0.7f, cg * 0.7f, cb * 0.7f, ca)
+                    builder.addVertex(matrix, x - bw, y + bw, z1).setColor(cr * 0.7f, cg * 0.7f, cb * 0.7f, ca)
+                    builder.addVertex(matrix, x - bw, y + bw, z0).setColor(cr * 0.7f, cg * 0.7f, cb * 0.7f, ca)
+                    // East face (+X)
+                    builder.addVertex(matrix, x + bw, y - bw, z1).setColor(cr * 0.7f, cg * 0.7f, cb * 0.7f, ca)
+                    builder.addVertex(matrix, x + bw, y - bw, z0).setColor(cr * 0.7f, cg * 0.7f, cb * 0.7f, ca)
+                    builder.addVertex(matrix, x + bw, y + bw, z0).setColor(cr * 0.7f, cg * 0.7f, cb * 0.7f, ca)
+                    builder.addVertex(matrix, x + bw, y + bw, z1).setColor(cr * 0.7f, cg * 0.7f, cb * 0.7f, ca)
+                }
 
-                // 4 top edges
-                drawEdge(minX, maxY, minZ, maxX, maxY, minZ)
-                drawEdge(maxX, maxY, minZ, maxX, maxY, maxZ)
-                drawEdge(maxX, maxY, maxZ, minX, maxY, maxZ)
-                drawEdge(minX, maxY, maxZ, minX, maxY, minZ)
+                fun drawBeamY(x: Float, y0: Float, y1: Float, z: Float) {
+                    val cr = bCol.r
+                    val cg = bCol.g
+                    val cb = bCol.b
+                    val ca = bCol.a
+                    // Front face (+Z)
+                    builder.addVertex(matrix, x - bw, y0, z + bw).setColor(cr * 0.8f, cg * 0.8f, cb * 0.8f, ca)
+                    builder.addVertex(matrix, x + bw, y0, z + bw).setColor(cr * 0.8f, cg * 0.8f, cb * 0.8f, ca)
+                    builder.addVertex(matrix, x + bw, y1, z + bw).setColor(cr * 0.8f, cg * 0.8f, cb * 0.8f, ca)
+                    builder.addVertex(matrix, x - bw, y1, z + bw).setColor(cr * 0.8f, cg * 0.8f, cb * 0.8f, ca)
+                    // Back face (-Z)
+                    builder.addVertex(matrix, x + bw, y0, z - bw).setColor(cr * 0.8f, cg * 0.8f, cb * 0.8f, ca)
+                    builder.addVertex(matrix, x - bw, y0, z - bw).setColor(cr * 0.8f, cg * 0.8f, cb * 0.8f, ca)
+                    builder.addVertex(matrix, x - bw, y1, z - bw).setColor(cr * 0.8f, cg * 0.8f, cb * 0.8f, ca)
+                    builder.addVertex(matrix, x + bw, y1, z - bw).setColor(cr * 0.8f, cg * 0.8f, cb * 0.8f, ca)
+                    // West face (-X)
+                    builder.addVertex(matrix, x - bw, y0, z - bw).setColor(cr * 0.7f, cg * 0.7f, cb * 0.7f, ca)
+                    builder.addVertex(matrix, x - bw, y0, z + bw).setColor(cr * 0.7f, cg * 0.7f, cb * 0.7f, ca)
+                    builder.addVertex(matrix, x - bw, y1, z + bw).setColor(cr * 0.7f, cg * 0.7f, cb * 0.7f, ca)
+                    builder.addVertex(matrix, x - bw, y1, z - bw).setColor(cr * 0.7f, cg * 0.7f, cb * 0.7f, ca)
+                    // East face (+X)
+                    builder.addVertex(matrix, x + bw, y0, z + bw).setColor(cr * 0.7f, cg * 0.7f, cb * 0.7f, ca)
+                    builder.addVertex(matrix, x + bw, y0, z - bw).setColor(cr * 0.7f, cg * 0.7f, cb * 0.7f, ca)
+                    builder.addVertex(matrix, x + bw, y1, z - bw).setColor(cr * 0.7f, cg * 0.7f, cb * 0.7f, ca)
+                    builder.addVertex(matrix, x + bw, y1, z + bw).setColor(cr * 0.7f, cg * 0.7f, cb * 0.7f, ca)
+                }
 
-                // 4 bottom edges
-                drawEdge(minX, minY, minZ, maxX, minY, minZ)
-                drawEdge(maxX, minY, minZ, maxX, minY, maxZ)
-                drawEdge(maxX, minY, maxZ, minX, minY, maxZ)
-                drawEdge(minX, minY, maxZ, minX, minY, minZ)
+                // 4 vertical pillars (Y)
+                drawBeamY(minX, minY, maxY, minZ)
+                drawBeamY(maxX, minY, maxY, minZ)
+                drawBeamY(minX, minY, maxY, maxZ)
+                drawBeamY(maxX, minY, maxY, maxZ)
+
+                // 4 top edges (X & Z)
+                drawBeamX(minX, maxX, maxY, minZ)
+                drawBeamX(minX, maxX, maxY, maxZ)
+                drawBeamZ(minX, maxY, minZ, maxZ)
+                drawBeamZ(maxX, maxY, minZ, maxZ)
+
+                // 4 bottom edges (X & Z)
+                drawBeamX(minX, maxX, minY, minZ)
+                drawBeamX(minX, maxX, minY, maxZ)
+                drawBeamZ(minX, minY, minZ, maxZ)
+                drawBeamZ(maxX, minY, minZ, maxZ)
             }
         }
     }
@@ -347,6 +441,8 @@ class FloatingChunkDiorama private constructor(
         private var updateIntervalMs: Long = 250L
         private var entityFilter: ((Entity) -> Boolean)? = null
         private var pivotAtBase: Boolean = false
+        private var facingYaw: Float = 0f
+        private var maxRenderDistance: Double = 64.0
 
         fun setRadius(radiusBlocks: Int) = apply {
             this.radiusX = radiusBlocks.coerceAtLeast(1)
@@ -372,6 +468,8 @@ class FloatingChunkDiorama private constructor(
         }
         fun animateSpin(speedY: Float) = apply { this.spinSpeedY = speedY }
         fun setTiltPitch(pitch: Float) = apply { this.tiltPitch = pitch }
+        fun setFacingYaw(yaw: Float) = apply { this.facingYaw = yaw }
+        fun setMaxRenderDistance(distance: Double) = apply { this.maxRenderDistance = distance }
         fun setRenderEntities(render: Boolean) = apply { this.renderEntities = render }
         fun setCullHiddenBlocks(cull: Boolean) = apply { this.cullHiddenBlocks = cull }
         fun setShowBasePlate(show: Boolean) = apply { this.showBasePlate = show }
@@ -407,6 +505,8 @@ class FloatingChunkDiorama private constructor(
             updateIntervalMs = updateIntervalMs,
             entityFilter = entityFilter,
             pivotAtBase = pivotAtBase,
+            facingYaw = facingYaw,
+            maxRenderDistance = maxRenderDistance,
         )
     }
 }

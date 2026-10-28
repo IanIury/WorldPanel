@@ -1,16 +1,18 @@
 package dev.ian.worldpanel
 
+import dev.ian.worldpanel.diorama.DioramaSamplingKey
 import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
 import net.minecraft.world.entity.Entity
-import net.minecraft.world.entity.LivingEntity
 import net.minecraft.world.level.block.state.BlockState
 import net.minecraft.world.phys.AABB
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * High-performance 3D cubic terrain and live entity sampler for [FloatingChunkDiorama].
  * Samples real block states and active entities within a cubic radius around a center point.
+ * Includes multi-instance deduplication cache to share sampling cost across identical dioramas.
  */
 class ChunkDioramaSampler(
     val radiusX: Int = 4,
@@ -31,7 +33,17 @@ class ChunkDioramaSampler(
         val worldPos: BlockPos,
     )
 
+    companion object {
+        private data class CacheEntry(val timestamp: Long, val blocks: List<SampledBlock>)
+        private val sharedSampleCache = ConcurrentHashMap<DioramaSamplingKey, CacheEntry>()
+
+        fun clearSharedCache() {
+            sharedSampleCache.clear()
+        }
+    }
+
     private var lastSampleTime: Long = 0L
+    private var hasSampled: Boolean = false
     var cachedCenter: BlockPos = BlockPos.ZERO
         private set
     var cachedBlocks: List<SampledBlock> = emptyList()
@@ -46,12 +58,30 @@ class ChunkDioramaSampler(
     fun updateIfNeeded() {
         val now = System.currentTimeMillis()
         val center = getCenter()
-        if (now - lastSampleTime < updateIntervalMs && cachedBlocks.isNotEmpty() && cachedCenter == center) return
+        if (hasSampled && (now - lastSampleTime < updateIntervalMs) && cachedCenter == center) return
         lastSampleTime = now
+        hasSampled = true
 
         val mc = Minecraft.getInstance()
         val level = mc.level ?: return
         cachedCenter = center
+
+        val cacheKey = DioramaSamplingKey(
+            centerX = center.x,
+            centerY = center.y,
+            centerZ = center.z,
+            radiusX = radiusX,
+            radiusZ = radiusZ,
+            heightBelow = heightBelow,
+            heightAbove = heightAbove,
+            cullHiddenBlocks = cullHiddenBlocks,
+        )
+
+        val cachedEntry = sharedSampleCache[cacheKey]
+        if (cachedEntry != null && (now - cachedEntry.timestamp < updateIntervalMs)) {
+            cachedBlocks = cachedEntry.blocks
+            return
+        }
 
         val minX = center.x - radiusX
         val maxX = center.x + radiusX
@@ -93,6 +123,7 @@ class ChunkDioramaSampler(
             }
         }
         cachedBlocks = result
+        sharedSampleCache[cacheKey] = CacheEntry(now, result)
     }
 
     fun getEntities(): List<Entity> {

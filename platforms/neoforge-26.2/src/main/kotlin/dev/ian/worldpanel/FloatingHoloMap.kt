@@ -3,6 +3,8 @@ package dev.ian.worldpanel
 import com.mojang.blaze3d.vertex.PoseStack
 import com.mojang.blaze3d.vertex.VertexConsumer
 import com.mojang.math.Axis
+import dev.ian.worldpanel.diorama.FaceShade
+import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.OrderedSubmitNodeCollector
 import net.minecraft.client.renderer.rendertype.RenderTypes
 import net.minecraft.core.BlockPos
@@ -14,6 +16,7 @@ import kotlin.math.sin
 
 /**
  * A 3D miniature holographic projection of the world's real terrain chunks and live entity radar in Minecraft 26.2.
+ * Fully coherent when observed from any 360-degree angle with complete 4-sided pillar geometry and directional shading.
  */
 class FloatingHoloMap private constructor(
     val radiusChunks: Int,
@@ -32,6 +35,8 @@ class FloatingHoloMap private constructor(
     val spinSpeedY: Float,
     val tiltPitch: Float,
     val stepBlocks: Int,
+    val facingYaw: Float = 0f,
+    val maxRenderDistance: Double = 64.0,
 ) {
     val sampler = HoloMapSampler(
         radiusChunks = radiusChunks,
@@ -42,6 +47,18 @@ class FloatingHoloMap private constructor(
     )
 
     fun render(poseStack: PoseStack, collector: OrderedSubmitNodeCollector, packedLight: Int) {
+        val mc = Minecraft.getInstance()
+        val player = mc.player
+        if (player != null && maxRenderDistance > 0.0) {
+            val dx = player.x - offsetX
+            val dy = player.y - offsetY
+            val dz = player.z - offsetZ
+            val maxSq = maxRenderDistance * maxRenderDistance
+            if ((dx * dx + dy * dy + dz * dz) > maxSq) {
+                return
+            }
+        }
+
         sampler.updateIfNeeded()
 
         val timeSeconds = WindowColor.currentTimeSeconds()
@@ -52,8 +69,10 @@ class FloatingHoloMap private constructor(
         poseStack.pushPose()
         poseStack.translate(offsetX, offsetY, offsetZ)
 
-        if (rotYaw != 0f) poseStack.mulPose(Axis.YP.rotationDegrees(rotYaw))
+        // Correct hierarchical rotation: Showcase table facing -> Table tilt pitch -> Turntable spin
+        if (facingYaw != 0f) poseStack.mulPose(Axis.YP.rotationDegrees(facingYaw))
         if (tiltPitch != 0f) poseStack.mulPose(Axis.XP.rotationDegrees(tiltPitch))
+        if (rotYaw != 0f) poseStack.mulPose(Axis.YP.rotationDegrees(rotYaw))
         poseStack.scale(scale, scale, scale)
 
         collector.submitCustomGeometry(poseStack, RenderTypes.debugQuads()) { pose, builder ->
@@ -95,34 +114,59 @@ class FloatingHoloMap private constructor(
                     colA = 0.85f
                 }
 
-                // Top surface quad
-                builder.addVertex(matrix, vx - hw, vy, vz - hd).setColor(colR, colG, colB, colA)
-                builder.addVertex(matrix, vx - hw, vy, vz + hd).setColor(colR, colG, colB, colA)
-                builder.addVertex(matrix, vx + hw, vy, vz + hd).setColor(colR, colG, colB, colA)
-                builder.addVertex(matrix, vx + hw, vy, vz - hd).setColor(colR, colG, colB, colA)
+                // Top surface quad (FaceShade.TOP = 1.0)
+                builder.addVertex(matrix, vx - hw, vy, vz - hd).setColor(colR * FaceShade.TOP, colG * FaceShade.TOP, colB * FaceShade.TOP, colA)
+                builder.addVertex(matrix, vx - hw, vy, vz + hd).setColor(colR * FaceShade.TOP, colG * FaceShade.TOP, colB * FaceShade.TOP, colA)
+                builder.addVertex(matrix, vx + hw, vy, vz + hd).setColor(colR * FaceShade.TOP, colG * FaceShade.TOP, colB * FaceShade.TOP, colA)
+                builder.addVertex(matrix, vx + hw, vy, vz - hd).setColor(colR * FaceShade.TOP, colG * FaceShade.TOP, colB * FaceShade.TOP, colA)
 
-                // Side translucent pillar walls
-                val sideAlpha = colA * 0.30f
-                // Front (+Z)
-                builder.addVertex(matrix, vx - hw, 0f, vz + hd).setColor(colR * 0.6f, colG * 0.6f, colB * 0.6f, sideAlpha)
-                builder.addVertex(matrix, vx - hw, vy, vz + hd).setColor(colR, colG, colB, sideAlpha)
-                builder.addVertex(matrix, vx + hw, vy, vz + hd).setColor(colR, colG, colB, sideAlpha)
-                builder.addVertex(matrix, vx + hw, 0f, vz + hd).setColor(colR * 0.6f, colG * 0.6f, colB * 0.6f, sideAlpha)
+                // Side translucent pillar walls - all 4 sides with proper winding and directional shading
+                val sideAlpha = colA * 0.35f
 
-                // Left (-X)
-                builder.addVertex(matrix, vx - hw, 0f, vz - hd).setColor(colR * 0.5f, colG * 0.5f, colB * 0.5f, sideAlpha)
-                builder.addVertex(matrix, vx - hw, vy, vz - hd).setColor(colR, colG, colB, sideAlpha)
-                builder.addVertex(matrix, vx - hw, vy, vz + hd).setColor(colR, colG, colB, sideAlpha)
-                builder.addVertex(matrix, vx - hw, 0f, vz + hd).setColor(colR * 0.5f, colG * 0.5f, colB * 0.5f, sideAlpha)
+                // South (+Z)
+                val sR = colR * FaceShade.SOUTH
+                val sG = colG * FaceShade.SOUTH
+                val sB = colB * FaceShade.SOUTH
+                builder.addVertex(matrix, vx - hw, 0f, vz + hd).setColor(sR * 0.6f, sG * 0.6f, sB * 0.6f, sideAlpha)
+                builder.addVertex(matrix, vx + hw, 0f, vz + hd).setColor(sR * 0.6f, sG * 0.6f, sB * 0.6f, sideAlpha)
+                builder.addVertex(matrix, vx + hw, vy, vz + hd).setColor(sR, sG, sB, sideAlpha)
+                builder.addVertex(matrix, vx - hw, vy, vz + hd).setColor(sR, sG, sB, sideAlpha)
+
+                // North (-Z)
+                val nR = colR * FaceShade.NORTH
+                val nG = colG * FaceShade.NORTH
+                val nB = colB * FaceShade.NORTH
+                builder.addVertex(matrix, vx + hw, 0f, vz - hd).setColor(nR * 0.6f, nG * 0.6f, nB * 0.6f, sideAlpha)
+                builder.addVertex(matrix, vx - hw, 0f, vz - hd).setColor(nR * 0.6f, nG * 0.6f, nB * 0.6f, sideAlpha)
+                builder.addVertex(matrix, vx - hw, vy, vz - hd).setColor(nR, nG, nB, sideAlpha)
+                builder.addVertex(matrix, vx + hw, vy, vz - hd).setColor(nR, nG, nB, sideAlpha)
+
+                // West (-X)
+                val wR = colR * FaceShade.WEST
+                val wG = colG * FaceShade.WEST
+                val wB = colB * FaceShade.WEST
+                builder.addVertex(matrix, vx - hw, 0f, vz - hd).setColor(wR * 0.5f, wG * 0.5f, wB * 0.5f, sideAlpha)
+                builder.addVertex(matrix, vx - hw, 0f, vz + hd).setColor(wR * 0.5f, wG * 0.5f, wB * 0.5f, sideAlpha)
+                builder.addVertex(matrix, vx - hw, vy, vz + hd).setColor(wR, wG, wB, sideAlpha)
+                builder.addVertex(matrix, vx - hw, vy, vz - hd).setColor(wR, wG, wB, sideAlpha)
+
+                // East (+X)
+                val eR = colR * FaceShade.EAST
+                val eG = colG * FaceShade.EAST
+                val eB = colB * FaceShade.EAST
+                builder.addVertex(matrix, vx + hw, 0f, vz + hd).setColor(eR * 0.5f, eG * 0.5f, eB * 0.5f, sideAlpha)
+                builder.addVertex(matrix, vx + hw, 0f, vz - hd).setColor(eR * 0.5f, eG * 0.5f, eB * 0.5f, sideAlpha)
+                builder.addVertex(matrix, vx + hw, vy, vz - hd).setColor(eR, eG, eB, sideAlpha)
+                builder.addVertex(matrix, vx + hw, vy, vz + hd).setColor(eR, eG, eB, sideAlpha)
 
                 // Altitude scanline intersection highlight
                 val distToScan = kotlin.math.abs(vy - scanY)
                 if (distToScan < 2.0f) {
                     val highlight = (1f - distToScan / 2.0f) * 0.7f
-                    builder.addVertex(matrix, vx - hw, vy + 0.1f, vz - hd).setColor(1f, 1f, 1f, highlight)
-                    builder.addVertex(matrix, vx - hw, vy + 0.1f, vz + hd).setColor(1f, 1f, 1f, highlight)
-                    builder.addVertex(matrix, vx + hw, vy + 0.1f, vz + hd).setColor(1f, 1f, 1f, highlight)
-                    builder.addVertex(matrix, vx + hw, vy + 0.1f, vz - hd).setColor(1f, 1f, 1f, highlight)
+                    builder.addVertex(matrix, vx - hw, vy + 0.05f, vz - hd).setColor(1f, 1f, 1f, highlight)
+                    builder.addVertex(matrix, vx - hw, vy + 0.05f, vz + hd).setColor(1f, 1f, 1f, highlight)
+                    builder.addVertex(matrix, vx + hw, vy + 0.05f, vz + hd).setColor(1f, 1f, 1f, highlight)
+                    builder.addVertex(matrix, vx + hw, vy + 0.05f, vz - hd).setColor(1f, 1f, 1f, highlight)
                 }
             }
 
@@ -159,18 +203,32 @@ class FloatingHoloMap private constructor(
             val x1In = rIn * cos(a1)
             val z1In = rIn * sin(a1)
 
+            // Top ring
             builder.addVertex(matrix, x0Out, 0f, z0Out).setColor(holo.r, holo.g, holo.b, holo.a * 0.8f)
             builder.addVertex(matrix, x0In, 0f, z0In).setColor(holo.r, holo.g, holo.b, holo.a * 0.8f)
             builder.addVertex(matrix, x1In, 0f, z1In).setColor(holo.r, holo.g, holo.b, holo.a * 0.8f)
             builder.addVertex(matrix, x1Out, 0f, z1Out).setColor(holo.r, holo.g, holo.b, holo.a * 0.8f)
+
+            // Bottom ring for underside visibility
+            builder.addVertex(matrix, x0Out, -0.2f, z0Out).setColor(holo.r * 0.4f, holo.g * 0.4f, holo.b * 0.4f, holo.a * 0.6f)
+            builder.addVertex(matrix, x1Out, -0.2f, z1Out).setColor(holo.r * 0.4f, holo.g * 0.4f, holo.b * 0.4f, holo.a * 0.6f)
+            builder.addVertex(matrix, x1In, -0.2f, z1In).setColor(holo.r * 0.4f, holo.g * 0.4f, holo.b * 0.4f, holo.a * 0.6f)
+            builder.addVertex(matrix, x0In, -0.2f, z0In).setColor(holo.r * 0.4f, holo.g * 0.4f, holo.b * 0.4f, holo.a * 0.6f)
         }
 
         val halfW = tableWidth / 2f
         val halfH = tableHeight / 2f
+        // Top grid plate
         builder.addVertex(matrix, -halfW, -0.05f, -halfH).setColor(holo.r * 0.2f, holo.g * 0.2f, holo.b * 0.2f, 0.25f)
         builder.addVertex(matrix, -halfW, -0.05f, halfH).setColor(holo.r * 0.2f, holo.g * 0.2f, holo.b * 0.2f, 0.25f)
         builder.addVertex(matrix, halfW, -0.05f, halfH).setColor(holo.r * 0.2f, holo.g * 0.2f, holo.b * 0.2f, 0.25f)
         builder.addVertex(matrix, halfW, -0.05f, -halfH).setColor(holo.r * 0.2f, holo.g * 0.2f, holo.b * 0.2f, 0.25f)
+
+        // Bottom grid plate
+        builder.addVertex(matrix, -halfW, -0.15f, halfH).setColor(holo.r * 0.1f, holo.g * 0.1f, holo.b * 0.1f, 0.25f)
+        builder.addVertex(matrix, -halfW, -0.15f, -halfH).setColor(holo.r * 0.1f, holo.g * 0.1f, holo.b * 0.1f, 0.25f)
+        builder.addVertex(matrix, halfW, -0.15f, -halfH).setColor(holo.r * 0.1f, holo.g * 0.1f, holo.b * 0.1f, 0.25f)
+        builder.addVertex(matrix, halfW, -0.15f, halfH).setColor(holo.r * 0.1f, holo.g * 0.1f, holo.b * 0.1f, 0.25f)
 
         val beamH = maxHeightBlocks + 8f
         val beamApexX = halfW * 0.7f
@@ -251,6 +309,8 @@ class FloatingHoloMap private constructor(
         private var spinSpeedY: Float = 0.4f
         private var tiltPitch: Float = 25f
         private var stepBlocks: Int = 2
+        private var facingYaw: Float = 0f
+        private var maxRenderDistance: Double = 64.0
 
         fun setChunkRadius(radius: Int) = apply { this.radiusChunks = radius.coerceAtLeast(1) }
         fun setForwardOffsetChunks(forward: Int) = apply { this.forwardOffsetChunks = forward }
@@ -272,6 +332,8 @@ class FloatingHoloMap private constructor(
         fun animateSpin(speedY: Float) = apply { this.spinSpeedY = speedY }
         fun setTiltPitch(pitch: Float) = apply { this.tiltPitch = pitch }
         fun setStepBlocks(step: Int) = apply { this.stepBlocks = step.coerceAtLeast(1) }
+        fun setFacingYaw(yaw: Float) = apply { this.facingYaw = yaw }
+        fun setMaxRenderDistance(distance: Double) = apply { this.maxRenderDistance = distance }
 
         fun build(): FloatingHoloMap = FloatingHoloMap(
             radiusChunks = radiusChunks,
@@ -290,6 +352,8 @@ class FloatingHoloMap private constructor(
             spinSpeedY = spinSpeedY,
             tiltPitch = tiltPitch,
             stepBlocks = stepBlocks,
+            facingYaw = facingYaw,
+            maxRenderDistance = maxRenderDistance,
         )
     }
 

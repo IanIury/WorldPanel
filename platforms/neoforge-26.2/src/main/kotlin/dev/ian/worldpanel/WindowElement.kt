@@ -5,6 +5,9 @@ import com.mojang.blaze3d.vertex.VertexConsumer
 import com.mojang.math.Axis
 import dev.ian.worldpanel.camera.CameraSource
 import dev.ian.worldpanel.camera.CameraView
+import dev.ian.worldpanel.camera.CameraSwitcher
+import dev.ian.worldpanel.camera.VirtualCameraConfig
+import dev.ian.worldpanel.diorama.FaceShade
 import dev.ian.worldpanel.camera.ScreenRenderTargetManager
 import dev.ian.worldpanel.layout.MeasurableElement
 import net.minecraft.client.Minecraft
@@ -999,7 +1002,7 @@ interface WindowElement : MeasurableElement {
             val renderType = if (seeThrough) RenderTypes.textBackgroundSeeThrough() else RenderTypes.textBackground()
 
             val bgZ = 0.005f
-            val playerZ = 0.01f
+            val screenZ = 0.01f
             val overlayZ = 0.02f
             val borderZ = 0.022f
             val textZ = 0.025f
@@ -1039,57 +1042,24 @@ interface WindowElement : MeasurableElement {
                 }
             }
 
-            // 2. Render Flattened 2D Entity
+            // 2. Render Pure 2D Flat Screen Texture from ScreenRenderTargetManager
             val entity = entitySupplier()
-            if (entity != null && !entity.isRemoved) {
-                val dispatcher = Minecraft.getInstance().entityRenderDispatcher
-                val partialTick = Minecraft.getInstance().deltaTracker.getGameTimeDeltaPartialTick(false)
-                val maxDim = max(1f, max(entity.bbHeight, entity.bbWidth))
-                val scaleFactor = (safeHeight * 0.85f) / maxDim
+            val source = CameraSource.Entity(
+                entitySupplier = entitySupplier,
+                spinSpeed = spinSpeed,
+                useEyePosition = false
+            )
+            val feedId = if (entity != null) "entity_${entity.id}" else "entity_feed"
+            val textureLocation = ScreenRenderTargetManager.getFeedTexture(feedId, source, style)
 
-                val renderState = dispatcher.extractEntity(entity, partialTick)
-                renderState.shadowPieces.clear()
-                renderState.shadowRadius = 0f
-                renderState.outlineColor = 0
-                if (renderState is net.minecraft.client.renderer.entity.state.LivingEntityRenderState) {
-                    renderState.bodyRot = 0f
-                    renderState.yRot = 0f
-                    renderState.xRot = 0f
-                    renderState.deathTime = 0f
-                }
-
-                val rotY = if (spinSpeed > 0f) {
-                    (time * spinSpeed * 50.0) % 360.0
-                } else {
-                    0.0
-                }
-
-                val submitCollector: SubmitNodeCollector =
-                    (entityCollector as? SubmitNodeCollector)
-                        ?: object : SubmitNodeCollector, OrderedSubmitNodeCollector by entityCollector {
-                            override fun order(order: Int) = entityCollector
-                        }
-
-                poseStack.pushPose()
-                poseStack.translate(drawX.toDouble() + safeWidth / 2.0, y.toDouble() + safeHeight * 0.88, playerZ.toDouble())
-                poseStack.scale(scaleFactor, -scaleFactor, scaleFactor * 0.1f)
-                if (rotY != 0.0) {
-                    poseStack.mulPose(Axis.YP.rotationDegrees(rotY.toFloat()))
-                }
-
-                try {
-                    dispatcher.submit(
-                        renderState,
-                        CameraRenderState(),
-                        0.0,
-                        0.0,
-                        0.0,
-                        poseStack,
-                        submitCollector
-                    )
-                } finally {
-                    poseStack.popPose()
-                }
+            entityCollector.submitCustomGeometry(poseStack, RenderTypes.entityCutout(textureLocation)) { pose, builder ->
+                val matrix = pose.pose()
+                val r = drawX + safeWidth
+                val b = y + safeHeight
+                builder.addVertex(matrix, drawX, y, screenZ).setColor(1f, 1f, 1f, 1f).setUv(0f, 0f).setOverlay(net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY).setLight(packedLight).setNormal(0f, 0f, 1f)
+                builder.addVertex(matrix, drawX, b, screenZ).setColor(1f, 1f, 1f, 1f).setUv(0f, 1f).setOverlay(net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY).setLight(packedLight).setNormal(0f, 0f, 1f)
+                builder.addVertex(matrix, r, b, screenZ).setColor(1f, 1f, 1f, 1f).setUv(1f, 1f).setOverlay(net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY).setLight(packedLight).setNormal(0f, 0f, 1f)
+                builder.addVertex(matrix, r, y, screenZ).setColor(1f, 1f, 1f, 1f).setUv(1f, 0f).setOverlay(net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY).setLight(packedLight).setNormal(0f, 0f, 1f)
             }
 
             // 3. Post-Process Video Feed Filters (Scanlines, Bezel, OSD)
@@ -1160,7 +1130,8 @@ interface WindowElement : MeasurableElement {
 
                 val sec = (time % 60.0).toInt()
                 val min = ((time / 60.0) % 60.0).toInt()
-                val timeStr = String.format("CAM-01 %02d:%02d", min, sec)
+                val targetName = entity?.name?.string?.take(10) ?: "CAM-01"
+                val timeStr = String.format("%s %02d:%02d", targetName, min, sec)
                 poseStack.pushPose()
                 poseStack.translate(drawX.toDouble() + 2.0, y.toDouble() + safeHeight - 6.0, textZ.toDouble())
                 poseStack.scale(0.5f, 0.5f, 1f)
@@ -1183,8 +1154,8 @@ interface WindowElement : MeasurableElement {
 
     /**
      * Renders a true 2D flat video or camera feed (CCTV security monitor, spatial world camera,
-     * or biometric entity feed) strictly contained to the monitor screen depth using isolated raster or diorama rendering.
-     * Completely eliminates 3D mesh protrusion and armor clipping when viewing the monitor from any angle.
+     * virtual location camera, or entity tracking feed) strictly contained to the monitor screen depth.
+     * Completely eliminates 3D mesh protrusion and clipping when viewing the monitor from any angle.
      */
     class CameraFeed(
         val source: CameraSource,
@@ -1193,6 +1164,8 @@ interface WindowElement : MeasurableElement {
         private val style: VideoFeedStyle = VideoFeedStyle.SECURITY_CAMERA_CCTV,
         private val alignment: Text.TextAlignment = Text.TextAlignment.CENTER,
         val feedId: String? = null,
+        val switcher: CameraSwitcher? = null,
+        val renderAs3DDiorama: Boolean = false,
     ) : WindowElement {
         constructor(
             cameraView: CameraView,
@@ -1202,6 +1175,31 @@ interface WindowElement : MeasurableElement {
             alignment: Text.TextAlignment = Text.TextAlignment.CENTER,
             feedId: String? = null,
         ) : this(CameraSource.Spatial(cameraView), width, height, style, alignment, feedId)
+
+        constructor(
+            config: VirtualCameraConfig,
+            width: Float = 64f,
+            height: Float = 48f,
+            style: VideoFeedStyle = VideoFeedStyle.SECURITY_CAMERA_CCTV,
+            alignment: Text.TextAlignment = Text.TextAlignment.CENTER,
+            feedId: String? = null,
+        ) : this(CameraSource.Virtual(config), width, height, style, alignment, feedId ?: config.id)
+
+        constructor(
+            switcher: CameraSwitcher,
+            width: Float = 64f,
+            height: Float = 48f,
+            style: VideoFeedStyle = VideoFeedStyle.SECURITY_CAMERA_CCTV,
+            alignment: Text.TextAlignment = Text.TextAlignment.CENTER,
+        ) : this(
+            source = switcher.currentSource() ?: CameraSource.of(net.minecraft.world.phys.Vec3.ZERO, 0f, 0f),
+            width = width,
+            height = height,
+            style = style,
+            alignment = alignment,
+            feedId = "switcher_${System.identityHashCode(switcher)}",
+            switcher = switcher,
+        )
 
         constructor(
             entity: LivingEntity,
@@ -1229,30 +1227,16 @@ interface WindowElement : MeasurableElement {
             entitySupplier: () -> LivingEntity?,
         ) : this(CameraSource.Entity(entitySupplier), width, height, style, alignment, null)
 
-        val resolvedFeedId: String = if (!feedId.isNullOrBlank()) {
-            feedId
-        } else {
-            when (source) {
-                is CameraSource.Spatial -> {
-                    val p = source.view.position
-                    "spatial_${p.x.toInt()}_${p.y.toInt()}_${p.z.toInt()}"
-                }
-                is CameraSource.Entity -> {
-                    val entity = source.entitySupplier()
-                    if (entity != null) "entity_${entity.id}" else "entity_feed"
-                }
-            }
-        }
-
         private val dioramaSampler: ChunkDioramaSampler by lazy {
             ChunkDioramaSampler(
                 radiusX = 3,
                 radiusZ = 3,
                 heightBelow = 2,
                 heightAbove = 3,
-                customCenter = when (source) {
-                    is CameraSource.Spatial -> BlockPos.containing(source.view.position)
-                    is CameraSource.Entity -> source.resolveView()?.let { BlockPos.containing(it.position) }
+                customCenter = when (val s = switcher?.currentSource() ?: source) {
+                    is CameraSource.Spatial -> BlockPos.containing(s.view.position)
+                    is CameraSource.Virtual -> BlockPos.containing(s.resolveView().position)
+                    is CameraSource.Entity -> s.resolveView()?.let { BlockPos.containing(it.position) }
                 },
                 cullHiddenBlocks = true,
                 showEntities = true,
@@ -1286,6 +1270,29 @@ interface WindowElement : MeasurableElement {
                 Text.TextAlignment.LEFT -> 0f
                 Text.TextAlignment.CENTER -> max(0f, (availableWidth - safeWidth) / 2f)
                 Text.TextAlignment.RIGHT -> max(0f, availableWidth - safeWidth)
+            }
+
+            val activeSource = switcher?.currentSource() ?: source
+            val activeLabel = switcher?.currentLabel() ?: when (activeSource) {
+                is CameraSource.Virtual -> activeSource.config.id
+                is CameraSource.Entity -> activeSource.entitySupplier()?.name?.string ?: "ENTITY"
+                is CameraSource.Spatial -> "CAM-01"
+            }
+
+            val resolvedFeedId: String = if (!feedId.isNullOrBlank()) {
+                feedId
+            } else {
+                when (activeSource) {
+                    is CameraSource.Spatial -> {
+                        val p = activeSource.view.position
+                        "spatial_${p.x.toInt()}_${p.y.toInt()}_${p.z.toInt()}"
+                    }
+                    is CameraSource.Virtual -> "virt_${activeSource.config.id}"
+                    is CameraSource.Entity -> {
+                        val entity = activeSource.entitySupplier()
+                        if (entity != null) "entity_${entity.id}" else "entity_feed"
+                    }
+                }
             }
 
             val time = WindowColor.currentTimeSeconds()
@@ -1334,18 +1341,20 @@ interface WindowElement : MeasurableElement {
                 }
             }
 
-            // 2. Spatial Camera Diorama or Flat 2D Texture Feed at Z = 0.01f
-            val cameraView: CameraView? = when (source) {
-                is CameraSource.Spatial -> source.view
-                is CameraSource.Entity -> if (source.useEyePosition) source.resolveView() else null
-            }
-
-            if (cameraView != null) {
-                FloatingChunkDiorama.withDioramaLock {
-                    renderSpatialDiorama(poseStack, contentCollector, drawX, y, safeWidth, safeHeight, cameraView, packedLight)
+            // 2. Render Screen Feed (Flat 2D Texture Quad by default, or optional 3D diorama)
+            if (renderAs3DDiorama) {
+                val cameraView: CameraView? = when (activeSource) {
+                    is CameraSource.Spatial -> activeSource.view
+                    is CameraSource.Virtual -> activeSource.resolveView()
+                    is CameraSource.Entity -> activeSource.resolveView()
+                }
+                if (cameraView != null) {
+                    FloatingChunkDiorama.withDioramaLock {
+                        renderSpatialDiorama(poseStack, contentCollector, drawX, y, safeWidth, safeHeight, cameraView, packedLight)
+                    }
                 }
             } else {
-                val textureLocation = ScreenRenderTargetManager.getFeedTexture(resolvedFeedId, source, style)
+                val textureLocation = ScreenRenderTargetManager.getFeedTexture(resolvedFeedId, activeSource, style)
                 contentCollector.submitCustomGeometry(poseStack, RenderTypes.entityCutout(textureLocation)) { pose, builder ->
                     val matrix = pose.pose()
                     val r = drawX + safeWidth
@@ -1447,9 +1456,9 @@ interface WindowElement : MeasurableElement {
 
                 // Channel/Status text at bottom-left
                 val tagText = when (style) {
-                    VideoFeedStyle.CYBER_GREEN_HOLOGRAM -> "CYBER-LINK // OK"
-                    VideoFeedStyle.CRT_SCANLINES -> "AV-1 [NTSC]"
-                    else -> "CAM-01 [LIVE]"
+                    VideoFeedStyle.CYBER_GREEN_HOLOGRAM -> "$activeLabel // OK"
+                    VideoFeedStyle.CRT_SCANLINES -> "$activeLabel [NTSC]"
+                    else -> "$activeLabel [LIVE]"
                 }
                 poseStack.pushPose()
                 poseStack.translate(drawX.toDouble() + 3.0, y.toDouble() + safeHeight - 7.0, hudZ.toDouble())
@@ -1582,7 +1591,8 @@ interface WindowElement : MeasurableElement {
 
     /**
      * A 3D miniature holographic map element embedded within a [FloatingWindow].
-     * Visualizes chunk terrain elevation, entity radar blips, and altitude laser scanlines.
+     * Visualizes chunk terrain elevation, entity radar blips, and altitude laser scanlines
+     * with complete 4-sided pillar geometry and directional face shading.
      */
     class HolographicRegionMap(
         radiusChunks: Int = 1,
@@ -1595,6 +1605,7 @@ interface WindowElement : MeasurableElement {
         private val spinSpeedY: Float = 0.4f,
         private val tiltPitch: Float = 25f,
         stepBlocks: Int = 2,
+        val facingYaw: Float = 0f,
         private val alignment: Text.TextAlignment = Text.TextAlignment.CENTER,
     ) : WindowElement {
         private val safeWidth = width.coerceAtLeast(10f)
@@ -1640,6 +1651,7 @@ interface WindowElement : MeasurableElement {
 
             poseStack.pushPose()
             poseStack.translate(drawX.toDouble() + safeWidth / 2.0, y.toDouble() + safeHeight / 2.0, 0.15)
+            if (facingYaw != 0f) poseStack.mulPose(Axis.YP.rotationDegrees(facingYaw))
             if (tiltPitch != 0f) poseStack.mulPose(Axis.XP.rotationDegrees(tiltPitch))
             if (rotYaw != 0f) poseStack.mulPose(Axis.YP.rotationDegrees(rotYaw))
 
@@ -1655,7 +1667,7 @@ interface WindowElement : MeasurableElement {
             collector.submitCustomGeometry(poseStack, renderType) { pose, builder ->
                 val matrix = pose.pose()
 
-                // Terrain Voxels
+                // Terrain Voxels with all 4 pillar walls and FaceShade
                 for (v in voxels) {
                     val vx = v.relX * 36f
                     val vz = v.relZ * 36f
@@ -1679,16 +1691,36 @@ interface WindowElement : MeasurableElement {
                     }
 
                     // Surface quad
-                    builder.addVertex(matrix, vx - hw, vy, vz - hd).setColor(colR, colG, colB, colA)
-                    builder.addVertex(matrix, vx - hw, vy, vz + hd).setColor(colR, colG, colB, colA)
-                    builder.addVertex(matrix, vx + hw, vy, vz + hd).setColor(colR, colG, colB, colA)
-                    builder.addVertex(matrix, vx + hw, vy, vz - hd).setColor(colR, colG, colB, colA)
+                    builder.addVertex(matrix, vx - hw, vy, vz - hd).setColor(colR * FaceShade.TOP, colG * FaceShade.TOP, colB * FaceShade.TOP, colA)
+                    builder.addVertex(matrix, vx - hw, vy, vz + hd).setColor(colR * FaceShade.TOP, colG * FaceShade.TOP, colB * FaceShade.TOP, colA)
+                    builder.addVertex(matrix, vx + hw, vy, vz + hd).setColor(colR * FaceShade.TOP, colG * FaceShade.TOP, colB * FaceShade.TOP, colA)
+                    builder.addVertex(matrix, vx + hw, vy, vz - hd).setColor(colR * FaceShade.TOP, colG * FaceShade.TOP, colB * FaceShade.TOP, colA)
 
-                    // Side pillar
-                    builder.addVertex(matrix, vx - hw, 0f, vz + hd).setColor(colR * 0.6f, colG * 0.6f, colB * 0.6f, colA * 0.3f)
-                    builder.addVertex(matrix, vx - hw, vy, vz + hd).setColor(colR, colG, colB, colA * 0.3f)
-                    builder.addVertex(matrix, vx + hw, vy, vz + hd).setColor(colR, colG, colB, colA * 0.3f)
-                    builder.addVertex(matrix, vx + hw, 0f, vz + hd).setColor(colR * 0.6f, colG * 0.6f, colB * 0.6f, colA * 0.3f)
+                    // Side translucent pillar walls - all 4 faces
+                    val sideA = colA * 0.30f
+                    // South (+Z)
+                    builder.addVertex(matrix, vx - hw, 0f, vz + hd).setColor(colR * FaceShade.SOUTH * 0.6f, colG * FaceShade.SOUTH * 0.6f, colB * FaceShade.SOUTH * 0.6f, sideA)
+                    builder.addVertex(matrix, vx + hw, 0f, vz + hd).setColor(colR * FaceShade.SOUTH * 0.6f, colG * FaceShade.SOUTH * 0.6f, colB * FaceShade.SOUTH * 0.6f, sideA)
+                    builder.addVertex(matrix, vx + hw, vy, vz + hd).setColor(colR * FaceShade.SOUTH, colG * FaceShade.SOUTH, colB * FaceShade.SOUTH, sideA)
+                    builder.addVertex(matrix, vx - hw, vy, vz + hd).setColor(colR * FaceShade.SOUTH, colG * FaceShade.SOUTH, colB * FaceShade.SOUTH, sideA)
+
+                    // North (-Z)
+                    builder.addVertex(matrix, vx + hw, 0f, vz - hd).setColor(colR * FaceShade.NORTH * 0.6f, colG * FaceShade.NORTH * 0.6f, colB * FaceShade.NORTH * 0.6f, sideA)
+                    builder.addVertex(matrix, vx - hw, 0f, vz - hd).setColor(colR * FaceShade.NORTH * 0.6f, colG * FaceShade.NORTH * 0.6f, colB * FaceShade.NORTH * 0.6f, sideA)
+                    builder.addVertex(matrix, vx - hw, vy, vz - hd).setColor(colR * FaceShade.NORTH, colG * FaceShade.NORTH, colB * FaceShade.NORTH, sideA)
+                    builder.addVertex(matrix, vx + hw, vy, vz - hd).setColor(colR * FaceShade.NORTH, colG * FaceShade.NORTH, colB * FaceShade.NORTH, sideA)
+
+                    // West (-X)
+                    builder.addVertex(matrix, vx - hw, 0f, vz - hd).setColor(colR * FaceShade.WEST * 0.5f, colG * FaceShade.WEST * 0.5f, colB * FaceShade.WEST * 0.5f, sideA)
+                    builder.addVertex(matrix, vx - hw, 0f, vz + hd).setColor(colR * FaceShade.WEST * 0.5f, colG * FaceShade.WEST * 0.5f, colB * FaceShade.WEST * 0.5f, sideA)
+                    builder.addVertex(matrix, vx - hw, vy, vz + hd).setColor(colR * FaceShade.WEST, colG * FaceShade.WEST, colB * FaceShade.WEST, sideA)
+                    builder.addVertex(matrix, vx - hw, vy, vz - hd).setColor(colR * FaceShade.WEST, colG * FaceShade.WEST, colB * FaceShade.WEST, sideA)
+
+                    // East (+X)
+                    builder.addVertex(matrix, vx + hw, 0f, vz + hd).setColor(colR * FaceShade.EAST * 0.5f, colG * FaceShade.EAST * 0.5f, colB * FaceShade.EAST * 0.5f, sideA)
+                    builder.addVertex(matrix, vx + hw, 0f, vz - hd).setColor(colR * FaceShade.EAST * 0.5f, colG * FaceShade.EAST * 0.5f, colB * FaceShade.EAST * 0.5f, sideA)
+                    builder.addVertex(matrix, vx + hw, vy, vz - hd).setColor(colR * FaceShade.EAST, colG * FaceShade.EAST, colB * FaceShade.EAST, sideA)
+                    builder.addVertex(matrix, vx + hw, vy, vz + hd).setColor(colR * FaceShade.EAST, colG * FaceShade.EAST, colB * FaceShade.EAST, sideA)
                 }
 
                 // Entity Blips
@@ -1718,7 +1750,7 @@ interface WindowElement : MeasurableElement {
 
     /**
      * A 3D miniature cubic diorama element (Maquete Real 1:1) embedded within a [FloatingWindow].
-     * Renders real textured blocks and live entities with anti-recursion safety.
+     * Renders real textured blocks and live entities with anti-recursion safety and distance culling.
      */
     class ChunkDiorama(
         radiusX: Int = 3,
@@ -1733,6 +1765,8 @@ interface WindowElement : MeasurableElement {
         private val spinSpeedY: Float = 0.3f,
         private val tiltPitch: Float = 22f,
         updateIntervalMs: Long = 250L,
+        val facingYaw: Float = 0f,
+        val maxRenderDistance: Double = 64.0,
         private val alignment: Text.TextAlignment = Text.TextAlignment.CENTER,
     ) : WindowElement {
         private val safeWidth = width.coerceAtLeast(10f)
@@ -1769,6 +1803,20 @@ interface WindowElement : MeasurableElement {
             seeThrough: Boolean,
         ) {
             if (FloatingChunkDiorama.isRenderingDiorama()) return
+
+            val mc = Minecraft.getInstance()
+            val player = mc.player
+            if (player != null && maxRenderDistance > 0.0) {
+                val center = sampler.cachedCenter
+                val dx = player.x - center.x
+                val dy = player.y - center.y
+                val dz = player.z - center.z
+                val maxSq = maxRenderDistance * maxRenderDistance
+                if ((dx * dx + dy * dy + dz * dz) > maxSq) {
+                    return
+                }
+            }
+
             val drawX = x + when (alignment) {
                 Text.TextAlignment.LEFT -> 0f
                 Text.TextAlignment.CENTER -> max(0f, (availableWidth - safeWidth) / 2f)
@@ -1785,6 +1833,7 @@ interface WindowElement : MeasurableElement {
 
             poseStack.pushPose()
             poseStack.translate(drawX.toDouble() + safeWidth / 2.0, y.toDouble() + safeHeight / 2.0, 0.15)
+            if (facingYaw != 0f) poseStack.mulPose(Axis.YP.rotationDegrees(facingYaw))
             if (tiltPitch != 0f) poseStack.mulPose(Axis.XP.rotationDegrees(tiltPitch))
             if (rotYaw != 0f) poseStack.mulPose(Axis.YP.rotationDegrees(rotYaw))
             poseStack.scale(dScale, -dScale, dScale)
@@ -1806,7 +1855,6 @@ interface WindowElement : MeasurableElement {
 
             // Entities
             if (renderEntities) {
-                val mc = Minecraft.getInstance()
                 val dispatcher = mc.entityRenderDispatcher
                 val deltaTracker = mc.deltaTracker
                 val partialTick = deltaTracker.getGameTimeDeltaPartialTick(false)
